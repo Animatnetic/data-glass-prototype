@@ -467,7 +467,7 @@ function App() {
             Data<span className="text-blue-300">Glass</span>
           </h1>
           <p className="text-white/70 text-lg">
-            Intelligent web scraping powered by serverless edge computing
+            Intelligent web scraping powered by AI
           </p>
         </motion.div>
 
