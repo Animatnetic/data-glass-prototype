@@ -221,7 +221,7 @@ function App() {
                 <label className="block text-white/80 text-sm font-medium mb-2">
                   Target URLs ({validUrlCount} {validUrlCount === 1 ? 'URL' : 'URLs'})
                 </label>
-                            {record.target_url}
+                <p className="text-white/60 text-xs mb-3">
                   💡 Tip: You can paste multiple URLs separated by commas in any field to automatically expand them
                 </p>
                 <div className="space-y-3">
@@ -229,7 +229,6 @@ function App() {
                     <motion.div
                       key={urlEntry.id}
                       initial={{ opacity: 0, y: 10 }}
-                            {new Date(record.created_at).toLocaleDateString()}
                       className="flex items-center space-x-3"
                     >
                       <div className="relative flex-1">
