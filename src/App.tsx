@@ -141,22 +141,100 @@ function App() {
     setError(null);
     setResult(null);
 
-    // Simulate API call
-    setTimeout(() => {
-      setResult({
-        id: 'demo-123',
-        preview: mockData.slice(0, 3),
-        total_items: mockData.length * validUrls.length, // Simulate data from multiple URLs
-        selectors_used: ['h1', 'h2', '.title', 'a[href]'],
-        status: 'completed',
-        urls_processed: validUrls.length
+    try {
+      // Step 1: Convert natural language query to Firecrawl configuration
+      const convertResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/convert-query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userQuery: query,
+          urls: validUrls.map(entry => entry.url)
+        }),
       });
+
+      if (!convertResponse.ok) {
+        throw new Error('Failed to convert query to Firecrawl configuration');
+      }
+
+      const { firecrawlConfig, extractionSchema } = await convertResponse.json();
+
+      // Step 2: Execute the scraping with Firecrawl
+      const scrapeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-scrape`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          urls: validUrls.map(entry => entry.url),
+          firecrawlConfig,
+          extractionSchema,
+          userQuery: query
+        }),
+      });
+
+      if (!scrapeResponse.ok) {
+        throw new Error('Failed to execute scraping');
+      }
+
+      const scrapeData = await scrapeResponse.json();
+
+      // Process results for display
+      const allExtractedData = [];
+      const successfulResults = scrapeData.results.filter(r => r.success);
+      
+      successfulResults.forEach(result => {
+        if (result.data?.extract) {
+          // Handle structured extraction
+          const extracted = result.data.extract;
+          if (Array.isArray(extracted)) {
+            allExtractedData.push(...extracted);
+          } else if (typeof extracted === 'object') {
+            // Flatten object properties that are arrays
+            Object.values(extracted).forEach(value => {
+              if (Array.isArray(value)) {
+                allExtractedData.push(...value);
+              } else {
+                allExtractedData.push(value);
+              }
+            });
+          }
+        } else if (result.data?.markdown || result.data?.html) {
+          // Handle raw content
+          allExtractedData.push({
+            content: result.data.markdown || result.data.html,
+            url: result.url,
+            title: result.data.metadata?.title,
+            description: result.data.metadata?.description
+          });
+        }
+      });
+
+      setResult({
+        id: `scrape-${Date.now()}`,
+        preview: allExtractedData.slice(0, 10),
+        total_items: scrapeData.summary.total_items_extracted,
+        selectors_used: Object.keys(extractionSchema?.properties || {}),
+        status: 'completed',
+        urls_processed: scrapeData.summary.successful_scrapes,
+        failed_urls: scrapeData.summary.failed_scrapes,
+        raw_data: allExtractedData
+      });
+
+    } catch (error) {
+      console.error('Scraping error:', error);
+      setError(error.message || 'An error occurred during scraping');
+    } finally {
       setIsLoading(false);
-    }, 3000);
+    }
   };
 
   const handleDownloadJSON = () => {
-    const jsonBlob = new Blob([JSON.stringify(mockData, null, 2)], {
+    const dataToDownload = result?.raw_data || mockData;
+    const jsonBlob = new Blob([JSON.stringify(dataToDownload, null, 2)], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(jsonBlob);
@@ -393,9 +471,9 @@ function App() {
                 {/* Data Display */}
                 <div className="bg-white/5 rounded-lg p-4">
                   {viewMode === 'table' ? (
-                    <DataTable data={mockData} />
+                    <DataTable data={result?.raw_data || mockData} />
                   ) : (
-                    <JsonViewer data={mockData} />
+                    <JsonViewer data={result?.raw_data || mockData} />
                   )}
                 </div>
               </div>
