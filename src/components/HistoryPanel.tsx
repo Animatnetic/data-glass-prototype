@@ -1,7 +1,17 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, ExternalLink, X } from 'lucide-react';
-import { ScrapeRecord } from '../lib/supabase';
+
+interface ScrapeRecord {
+  id: string;
+  created_at: string;
+  target_url: string;
+  user_query: string;
+  results: any[];
+  preview_data: any[];
+  status: string;
+  error_message?: string;
+}
 
 interface HistoryPanelProps {
   isOpen: boolean;
