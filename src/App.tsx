@@ -229,6 +229,7 @@ function App() {
                     <motion.div
                       key={urlEntry.id}
                       initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
                       className="flex items-center space-x-3"
                     >
                       <div className="relative flex-1">
