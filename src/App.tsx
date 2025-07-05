@@ -7,7 +7,6 @@ import {
   History,
   RefreshCw,
   ExternalLink,
-  LogIn,
   Plus,
   Trash2
 } from 'lucide-react';
@@ -20,8 +19,6 @@ import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
-import { AuthModal } from './components/AuthModal';
-import { UserMenu } from './components/UserMenu';
 import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
 import { ScrapeRecord } from './lib/supabase';
 import { LocalScrapeRecord } from './hooks/useLocalHistory';
@@ -56,7 +53,6 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Use database scrapes if user is logged in, otherwise use local scrapes
   const scrapes = user && supabase ? dbScrapes : localScrapes;
@@ -437,20 +433,6 @@ function App() {
               Intelligent web scraping powered by AI
             </p>
           </div>
-          
-          <div className="flex items-center space-x-4">
-            {user ? (
-              <UserMenu />
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Sign In</span>
-              </button>
-            )}
-          </div>
         </motion.div>
 
         {/* Main Interface */}
@@ -680,12 +662,6 @@ function App() {
         history={scrapes}
         onSelectHistory={handleHistorySelect}
         onRemoveHistory={handleHistoryRemove}
-      />
-      
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
       />
     </div>
   );
