@@ -324,7 +324,20 @@ function App() {
 
     } catch (error) {
       console.error('Scraping error:', error);
-      setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
+      
+      // Enhanced error handling for CORS proxy failures in fallback mode
+      let errorMessage = error.message || 'An error occurred during scraping';
+      
+      // Check if this is a CORS proxy failure in fallback mode
+      if (errorMessage === 'Failed to fetch' && !useEdgeFunctions) {
+        errorMessage = `Unable to access the website using the public CORS proxy. This is a common limitation when scraping certain websites in Local Mode. 
+        
+For more reliable scraping, consider setting up Advanced Mode with Edge Functions as described in the project README. This provides better success rates and bypasses many CORS restrictions.
+
+Alternatively, try a different website or check if the target URL is accessible.`;
+      }
+      
+      setError(`${errorMessage}${errorMessage !== 'Failed to fetch' ? '. Check the browser console for detailed logs.' : ''}`);
     } finally {
       setIsLoading(false);
     }
