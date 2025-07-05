@@ -30,6 +30,102 @@ interface ExecuteScrapeResponse {
   debug?: any;
 }
 
+// Helper function to extract specific data types from text
+const extractSpecificData = (text: string, dataType: string): any[] => {
+  const results = [];
+  
+  switch (dataType.toLowerCase()) {
+    case 'email':
+    case 'emails':
+    case 'email addresses':
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      const emails = text.match(emailRegex) || [];
+      emails.forEach((email, index) => {
+        // Get context around the email
+        const emailIndex = text.indexOf(email);
+        const contextStart = Math.max(0, emailIndex - 50);
+        const contextEnd = Math.min(text.length, emailIndex + email.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          email: email,
+          context: context,
+          _index: index,
+          _type: 'email'
+        });
+      });
+      break;
+      
+    case 'phone':
+    case 'phones':
+    case 'phone numbers':
+      const phoneRegex = /(\+?1?[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+      const phones = text.match(phoneRegex) || [];
+      phones.forEach((phone, index) => {
+        const phoneIndex = text.indexOf(phone);
+        const contextStart = Math.max(0, phoneIndex - 50);
+        const contextEnd = Math.min(text.length, phoneIndex + phone.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          phone: phone.trim(),
+          context: context,
+          _index: index,
+          _type: 'phone'
+        });
+      });
+      break;
+      
+    case 'price':
+    case 'prices':
+    case 'cost':
+    case 'costs':
+      const priceRegex = /\$[\d,]+\.?\d*|\$\d+|[\d,]+\.?\d*\s*(dollars?|USD|usd)/g;
+      const prices = text.match(priceRegex) || [];
+      prices.forEach((price, index) => {
+        const priceIndex = text.indexOf(price);
+        const contextStart = Math.max(0, priceIndex - 50);
+        const contextEnd = Math.min(text.length, priceIndex + price.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          price: price.trim(),
+          context: context,
+          _index: index,
+          _type: 'price'
+        });
+      });
+      break;
+      
+    case 'url':
+    case 'urls':
+    case 'links':
+    case 'link':
+      const urlRegex = /https?:\/\/[^\s)]+/g;
+      const urls = text.match(urlRegex) || [];
+      urls.forEach((url, index) => {
+        const urlIndex = text.indexOf(url);
+        const contextStart = Math.max(0, urlIndex - 50);
+        const contextEnd = Math.min(text.length, urlIndex + url.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          url: url.trim(),
+          context: context,
+          _index: index,
+          _type: 'url'
+        });
+      });
+      break;
+      
+    default:
+      // For other data types, return empty array
+      break;
+  }
+  
+  return results;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -69,11 +165,7 @@ Deno.serve(async (req: Request) => {
       console.error("Firecrawl API key not found in environment");
       return new Response(
         JSON.stringify({ 
-          error: "Firecrawl API key not configured. Please add FIRECRAWL_API_KEY to your environment variables.",
-          debug: { 
-            availableEnvVars: Object.keys(Deno.env.toObject()),
-            hasFirecrawlKey: !!firecrawlApiKey
-          }
+          error: "Firecrawl API key not configured. Please add FIRECRAWL_API_KEY to your environment variables."
         }),
         {
           status: 500,
@@ -88,6 +180,7 @@ Deno.serve(async (req: Request) => {
     console.log("Processing URLs:", urls);
     console.log("Firecrawl config:", JSON.stringify(firecrawlConfig, null, 2));
     console.log("Extraction schema:", JSON.stringify(extractionSchema, null, 2));
+    console.log("User query:", userQuery);
 
     // Process each URL
     for (const url of urls) {
@@ -142,7 +235,6 @@ Deno.serve(async (req: Request) => {
         });
 
         console.log("Firecrawl response status:", firecrawlResponse.status);
-        console.log("Firecrawl response headers:", Object.fromEntries(firecrawlResponse.headers.entries()));
 
         if (!firecrawlResponse.ok) {
           const errorText = await firecrawlResponse.text();
@@ -162,7 +254,8 @@ Deno.serve(async (req: Request) => {
         }
 
         const firecrawlData = await firecrawlResponse.json();
-        console.log("Firecrawl response data:", JSON.stringify(firecrawlData, null, 2));
+        console.log("Firecrawl response data keys:", Object.keys(firecrawlData.data || {}));
+        console.log("Firecrawl success:", firecrawlData.success);
         
         // Process the response based on format used
         let extractedData = null;
@@ -190,7 +283,8 @@ Deno.serve(async (req: Request) => {
                   ...item,
                   _index: index,
                   _source: key,
-                  _url: url
+                  _url: url,
+                  _category: key
                 }));
                 processedData.push(...items);
                 totalItemsExtracted += value.length;
@@ -198,14 +292,16 @@ Deno.serve(async (req: Request) => {
                 processedData.push({ 
                   ...value, 
                   _source: key,
-                  _url: url
+                  _url: url,
+                  _category: key
                 });
                 totalItemsExtracted += 1;
               } else if (value !== null && value !== undefined) {
                 processedData.push({ 
                   [key]: value, 
                   _source: 'extracted',
-                  _url: url
+                  _url: url,
+                  _category: key
                 });
                 totalItemsExtracted += 1;
               }
@@ -219,96 +315,115 @@ Deno.serve(async (req: Request) => {
             totalItemsExtracted += 1;
           }
         } 
-        // Fallback to markdown/html content processing
+        // Fallback to markdown/html content processing with specific data extraction
         else if (firecrawlData.data?.markdown || firecrawlData.data?.html) {
-          console.log("No extracted data, processing raw content");
+          console.log("No extracted data, processing raw content with specific data extraction");
           const content = firecrawlData.data.markdown || firecrawlData.data.html;
           
-          // Enhanced content processing for markdown
-          if (firecrawlData.data.markdown) {
-            const lines = content.split('\n').filter(line => line.trim());
-            const extractedItems = [];
-            
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i].trim();
+          // Try specific data extraction based on user query
+          const specificData = extractSpecificData(content, userQuery);
+          
+          if (specificData.length > 0) {
+            console.log(`Found ${specificData.length} specific data items for query: ${userQuery}`);
+            processedData = specificData.map(item => ({
+              ...item,
+              _url: url,
+              _source: 'specific_extraction'
+            }));
+            totalItemsExtracted += specificData.length;
+          } else {
+            // Enhanced general content processing for markdown
+            if (firecrawlData.data.markdown) {
+              const lines = content.split('\n').filter(line => line.trim());
+              const extractedItems = [];
               
-              // Extract headings
-              if (line.startsWith('#')) {
-                const level = (line.match(/^#+/) || [''])[0].length;
-                const title = line.replace(/^#+\s*/, '');
-                if (title.length > 0) {
-                  extractedItems.push({
-                    type: 'heading',
-                    title: title,
-                    level: level,
-                    url: url,
-                    _index: extractedItems.length
-                  });
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Extract headings
+                if (line.startsWith('#')) {
+                  const level = (line.match(/^#+/) || [''])[0].length;
+                  const title = line.replace(/^#+\s*/, '');
+                  if (title.length > 0) {
+                    extractedItems.push({
+                      type: 'heading',
+                      title: title,
+                      level: level,
+                      url: url,
+                      _index: extractedItems.length,
+                      _source: 'markdown_parsing'
+                    });
+                  }
                 }
-              }
-              // Extract links
-              else if (line.includes('http')) {
-                const urlMatches = line.match(/\[([^\]]*)\]\(([^)]+)\)/g);
-                if (urlMatches) {
-                  urlMatches.forEach(match => {
-                    const linkMatch = match.match(/\[([^\]]*)\]\(([^)]+)\)/);
-                    if (linkMatch) {
-                      extractedItems.push({
-                        type: 'link',
-                        title: linkMatch[1] || 'Link',
-                        url: linkMatch[2],
-                        source_url: url,
-                        _index: extractedItems.length
-                      });
-                    }
-                  });
-                } else {
-                  // Extract plain URLs
+                // Extract markdown links
+                else if (line.includes('[') && line.includes('](')) {
+                  const linkMatches = line.match(/\[([^\]]*)\]\(([^)]+)\)/g);
+                  if (linkMatches) {
+                    linkMatches.forEach(match => {
+                      const linkMatch = match.match(/\[([^\]]*)\]\(([^)]+)\)/);
+                      if (linkMatch) {
+                        extractedItems.push({
+                          type: 'link',
+                          title: linkMatch[1] || 'Link',
+                          url: linkMatch[2],
+                          source_url: url,
+                          _index: extractedItems.length,
+                          _source: 'markdown_parsing'
+                        });
+                      }
+                    });
+                  }
+                }
+                // Extract plain URLs
+                else if (line.includes('http')) {
                   const plainUrls = line.match(/https?:\/\/[^\s)]+/g);
                   if (plainUrls) {
                     plainUrls.forEach(plainUrl => {
                       extractedItems.push({
                         type: 'url',
-                        url: plainUrl,
+                        url: plainUrl.trim(),
                         context: line,
                         source_url: url,
-                        _index: extractedItems.length
+                        _index: extractedItems.length,
+                        _source: 'markdown_parsing'
                       });
                     });
                   }
                 }
+                // Extract meaningful text content
+                else if (line.length > 20 && !line.startsWith('*') && !line.startsWith('-')) {
+                  extractedItems.push({
+                    type: 'text',
+                    content: line,
+                    source_url: url,
+                    _index: extractedItems.length,
+                    _source: 'markdown_parsing'
+                  });
+                }
               }
-              // Extract meaningful text content
-              else if (line.length > 20 && !line.startsWith('*') && !line.startsWith('-')) {
-                extractedItems.push({
-                  type: 'text',
-                  content: line,
-                  source_url: url,
-                  _index: extractedItems.length
-                });
-              }
+              
+              processedData = extractedItems;
+              totalItemsExtracted += extractedItems.length;
+            } else {
+              // Fallback for HTML content
+              processedData = [{
+                type: 'raw_content',
+                content: content.substring(0, 1000), // Limit content length
+                url: url,
+                title: firecrawlData.data.metadata?.title,
+                description: firecrawlData.data.metadata?.description,
+                _index: 0,
+                _source: 'html_fallback'
+              }];
+              totalItemsExtracted += 1;
             }
-            
-            processedData = extractedItems;
-            totalItemsExtracted += extractedItems.length;
-          } else {
-            // Fallback for HTML content
-            processedData = [{
-              type: 'raw_content',
-              content: content.substring(0, 1000), // Limit content length
-              url: url,
-              title: firecrawlData.data.metadata?.title,
-              description: firecrawlData.data.metadata?.description,
-              _index: 0
-            }];
-            totalItemsExtracted += 1;
           }
         } else {
           console.log("No usable data found in Firecrawl response");
           processedData = [];
         }
 
-        console.log("Processed data:", JSON.stringify(processedData, null, 2));
+        console.log("Processed data sample:", JSON.stringify(processedData.slice(0, 3), null, 2));
         console.log("Items extracted from this URL:", processedData.length);
 
         results.push({
@@ -322,11 +437,12 @@ Deno.serve(async (req: Request) => {
               scrapedAt: new Date().toISOString(),
               userQuery: userQuery,
               itemCount: processedData.length,
-              format: firecrawlPayload.formats[0]
+              format: firecrawlPayload.formats[0],
+              extractionMethod: processedData.length > 0 ? processedData[0]._source : 'none'
             },
             raw: {
-              markdown: firecrawlData.data?.markdown,
-              html: firecrawlData.data?.html
+              markdown: firecrawlData.data?.markdown?.substring(0, 2000), // Limit raw data size
+              html: firecrawlData.data?.html?.substring(0, 2000)
             }
           },
           success: true
@@ -361,6 +477,7 @@ Deno.serve(async (req: Request) => {
       url: r.url,
       success: r.success,
       itemCount: r.success ? r.data?.extract?.length || 0 : 0,
+      extractionMethod: r.success ? r.data?.metadata?.extractionMethod : 'failed',
       error: r.error
     })));
     console.log("=== EXECUTE SCRAPE DEBUG END ===");

@@ -45,12 +45,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY");
+
     if (!openaiApiKey) {
       console.error("OpenAI API key not found in environment");
       return new Response(
         JSON.stringify({ 
-          error: "OpenAI API key not found",
-          debug: { env: Deno.env.toObject() }
+          error: "OpenAI API key not found"
         }),
         {
           status: 500,
@@ -59,19 +60,92 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. 
+    if (!firecrawlApiKey) {
+      console.error("Firecrawl API key not found in environment");
+      return new Response(
+        JSON.stringify({ 
+          error: "Firecrawl API key not found"
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
-CRITICAL: You must follow the exact Firecrawl API v1 specification:
+    // Step 1: Get webpage content for context analysis
+    console.log("=== STEP 1: ANALYZING WEBPAGE CONTENT ===");
+    let webpageContent = "";
+    const sampleUrl = urls[0]; // Use first URL for context analysis
 
+    try {
+      console.log(`Fetching content from: ${sampleUrl}`);
+      const contentResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${firecrawlApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: sampleUrl,
+          formats: ["markdown"],
+          onlyMainContent: true,
+          waitFor: 2000
+        }),
+      });
+
+      if (contentResponse.ok) {
+        const contentData = await contentResponse.json();
+        webpageContent = contentData.data?.markdown || "";
+        
+        // Limit content length for ChatGPT analysis (keep first 3000 chars)
+        if (webpageContent.length > 3000) {
+          webpageContent = webpageContent.substring(0, 3000) + "...";
+        }
+        
+        console.log("Successfully fetched webpage content:", webpageContent.length, "characters");
+        console.log("Content preview:", webpageContent.substring(0, 500));
+      } else {
+        console.log("Failed to fetch webpage content, proceeding without context");
+        webpageContent = "";
+      }
+    } catch (error) {
+      console.log("Error fetching webpage content:", error.message);
+      webpageContent = "";
+    }
+
+    // Step 2: Analyze content and create extraction configuration
+    console.log("=== STEP 2: CREATING EXTRACTION CONFIGURATION ===");
+
+    const systemPrompt = `You are an expert web scraping assistant that analyzes webpage content and creates precise Firecrawl API configurations.
+
+CRITICAL FIRECRAWL API v1 REQUIREMENTS:
 1. When using "extract" format, you MUST provide an "extract" object with a "schema" property
 2. The schema must be a valid JSON schema object
 3. Available formats: ["markdown", "html", "rawHtml", "extract", "screenshot"]
-4. If using "extract" format, do NOT include "markdown" or "html" in formats array
-5. If NOT using extract, use ["markdown"] or ["html"] formats
+4. If using "extract" format, do NOT include other formats in the array
+5. If NOT using extract, use ["markdown"] format
 
-EXAMPLES OF CORRECT CONFIGURATIONS:
+ANALYSIS PROCESS:
+1. Analyze the provided webpage content to understand the structure and data types
+2. Map the user's natural language query to specific elements found in the content
+3. Create a precise extraction schema that targets exactly what the user wants
 
-For structured data extraction (products, articles, etc.):
+EXTRACTION STRATEGIES:
+
+For SPECIFIC DATA TYPES (emails, phone numbers, prices, etc.):
+- Use "extract" format with targeted schema
+- Create properties that match the specific data pattern
+- Be very precise about what constitutes the target data
+
+For GENERAL CONTENT (headlines, paragraphs, links):
+- Use "extract" format with structured schema
+- Create clear property names that describe the content type
+- Include relevant metadata like URLs, titles, descriptions
+
+EXAMPLE CONFIGURATIONS:
+
+For "extract email addresses":
 {
   "firecrawlConfig": {
     "formats": ["extract"],
@@ -80,14 +154,13 @@ For structured data extraction (products, articles, etc.):
       "schema": {
         "type": "object",
         "properties": {
-          "articles": {
+          "emails": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "title": {"type": "string"},
-                "url": {"type": "string"},
-                "description": {"type": "string"}
+                "email": {"type": "string", "pattern": "^[\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,}$"},
+                "context": {"type": "string", "description": "Surrounding text context"}
               }
             }
           }
@@ -98,14 +171,13 @@ For structured data extraction (products, articles, etc.):
   "extractionSchema": {
     "type": "object",
     "properties": {
-      "articles": {
+      "emails": {
         "type": "array",
         "items": {
           "type": "object",
           "properties": {
-            "title": {"type": "string"},
-            "url": {"type": "string"},
-            "description": {"type": "string"}
+            "email": {"type": "string"},
+            "context": {"type": "string"}
           }
         }
       }
@@ -113,41 +185,68 @@ For structured data extraction (products, articles, etc.):
   }
 }
 
-For simple content extraction:
+For "headlines and titles":
 {
   "firecrawlConfig": {
-    "formats": ["markdown"],
+    "formats": ["extract"],
     "onlyMainContent": true,
-    "includeTags": ["h1", "h2", "h3", "p", "a"],
-    "excludeTags": ["script", "style", "nav", "footer"]
+    "extract": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "headlines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "level": {"type": "string", "description": "h1, h2, h3, etc."},
+                "url": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
   },
-  "extractionSchema": null
+  "extractionSchema": {
+    "type": "object",
+    "properties": {
+      "headlines": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {"type": "string"},
+            "level": {"type": "string"},
+            "url": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
 }
 
-MAPPING GUIDE:
-- "headlines", "titles", "news" → extract h1, h2, h3 tags
-- "links", "urls" → extract a tags with href
-- "products", "items", "listings" → structured extraction with name, price, description
-- "contact info", "emails", "phones" → extract contact-related text
-- "images", "photos" → extract img tags with src and alt
-- "prices", "costs" → extract price-related text and numbers
-- "descriptions", "content", "text" → extract p, div text content
+RESPONSE FORMAT: Return ONLY valid JSON, no explanations or markdown.`;
 
-RESPONSE FORMAT (return ONLY valid JSON):`;
+    const userPrompt = `WEBPAGE CONTENT ANALYSIS:
+${webpageContent ? `Here is the content from the target webpage (${sampleUrl}):\n\n${webpageContent}\n\n` : "No webpage content available for analysis.\n\n"}
 
-    const userPrompt = `Convert this natural language query into a Firecrawl configuration:
+USER EXTRACTION REQUEST: "${userQuery}"
 
-Query: "${userQuery}"
-Target URLs: ${urls.join(", ")}
+TARGET URLS: ${urls.join(", ")}
 
-Analyze the query and determine:
-1. What specific data elements are being requested
-2. Whether structured extraction is needed (use "extract" format) or simple content (use "markdown" format)
-3. Appropriate HTML selectors and schema properties
+TASK:
+1. Analyze the webpage content above to understand what data is available
+2. Map the user's request "${userQuery}" to specific elements in the content
+3. Create a precise Firecrawl extraction configuration that will extract ONLY the requested data type
+4. Be very specific - if they want "email addresses", extract only email addresses, not other contact info
+5. If they want "headlines", extract only headline/title elements, not body text
+6. Use the webpage content to understand the actual structure and create targeted selectors
 
 Return ONLY the JSON configuration, no explanations.`;
 
-    console.log("Making OpenAI API request...");
+    console.log("Making OpenAI API request for extraction configuration...");
 
     const chatGPTResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -168,7 +267,7 @@ Return ONLY the JSON configuration, no explanations.`;
           }
         ],
         temperature: 0.1,
-        max_tokens: 2000
+        max_tokens: 2500
       }),
     });
 
@@ -179,12 +278,7 @@ Return ONLY the JSON configuration, no explanations.`;
       console.error("OpenAI API error:", errorText);
       return new Response(
         JSON.stringify({ 
-          error: `OpenAI API error: ${chatGPTResponse.status} - ${errorText}`,
-          debug: { 
-            status: chatGPTResponse.status,
-            hasApiKey: !!openaiApiKey,
-            apiKeyPrefix: openaiApiKey?.substring(0, 10) + "..."
-          }
+          error: `OpenAI API error: ${chatGPTResponse.status} - ${errorText}`
         }),
         {
           status: 500,
@@ -202,11 +296,7 @@ Return ONLY the JSON configuration, no explanations.`;
       console.error("No response from ChatGPT:", chatGPTData);
       return new Response(
         JSON.stringify({ 
-          error: "No response from ChatGPT",
-          debug: { 
-            choices: chatGPTData.choices?.length || 0,
-            usage: chatGPTData.usage
-          }
+          error: "No response from ChatGPT"
         }),
         {
           status: 500,
@@ -254,8 +344,7 @@ Return ONLY the JSON configuration, no explanations.`;
               error: "Could not parse ChatGPT response as JSON",
               debug: { 
                 rawResponse: assistantMessage,
-                parseError: parseError.message,
-                extractedJson: jsonMatch?.[0]
+                parseError: parseError.message
               }
             }),
             {
@@ -339,7 +428,12 @@ Return ONLY the JSON configuration, no explanations.`;
 
     const response: ConvertQueryResponse = {
       firecrawlConfig: firecrawlConfig,
-      extractionSchema: extractionSchema
+      extractionSchema: extractionSchema,
+      debug: {
+        webpageContentLength: webpageContent.length,
+        hasWebpageContent: webpageContent.length > 0,
+        sampleUrl: sampleUrl
+      }
     };
 
     console.log("Returning response:", JSON.stringify(response, null, 2));
