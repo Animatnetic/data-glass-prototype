@@ -18,6 +18,7 @@ import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
+import { convertTableToMarkdown, generatePDFFromMarkdown, downloadMarkdown } from './utils/pdfGenerator';
 
 // Mock data for demonstration
 const mockData = [
@@ -262,8 +263,24 @@ function App() {
   };
 
   const handleDownloadPDF = () => {
-    // Simulate PDF download
-    alert('PDF generation would be handled by the backend Edge Function');
+    try {
+      const dataToExport = result?.raw_data || mockData;
+      const markdown = convertTableToMarkdown(dataToExport);
+      generatePDFFromMarkdown(markdown, 'scrape_results.pdf');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      setError('Failed to generate PDF. Please try again.');
+    }
+  };
+
+  const handleDownloadMarkdown = () => {
+    try {
+      const dataToExport = result?.raw_data || mockData;
+      downloadMarkdown(dataToExport, 'scrape_results.md');
+    } catch (error) {
+      console.error('Markdown download error:', error);
+      setError('Failed to download markdown. Please try again.');
+    }
   };
 
   const handleHistorySelect = (record: any) => {
@@ -447,6 +464,13 @@ function App() {
                     >
                       <Download className="w-4 h-4" />
                       <span>JSON</span>
+                    </button>
+                    <button
+                      onClick={handleDownloadMarkdown}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Markdown</span>
                     </button>
                     <button
                       onClick={handleDownloadPDF}
