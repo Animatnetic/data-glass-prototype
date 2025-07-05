@@ -62,8 +62,7 @@ Deno.serve(async (req: Request) => {
     const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY");
     console.log("Firecrawl API key check:", {
       hasKey: !!firecrawlApiKey,
-      keyPrefix: firecrawlApiKey?.substring(0, 10) + "..." || "NOT_FOUND",
-      envVars: Object.keys(Deno.env.toObject())
+      keyPrefix: firecrawlApiKey?.substring(0, 10) + "..." || "NOT_FOUND"
     });
 
     if (!firecrawlApiKey) {
@@ -95,31 +94,38 @@ Deno.serve(async (req: Request) => {
       console.log(`\n--- Processing URL: ${url} ---`);
       
       try {
-        // Prepare Firecrawl request with enhanced configuration
+        // Prepare Firecrawl request according to v1 API specification
         const firecrawlPayload: any = {
           url: url,
-          formats: firecrawlConfig.formats || ["markdown", "html"],
+          formats: firecrawlConfig.formats || ["markdown"],
           onlyMainContent: firecrawlConfig.onlyMainContent !== false,
           waitFor: 3000, // Wait 3 seconds for dynamic content
         };
 
-        // Add optional configuration
-        if (firecrawlConfig.includeTags && firecrawlConfig.includeTags.length > 0) {
-          firecrawlPayload.includeTags = firecrawlConfig.includeTags;
-          console.log("Including tags:", firecrawlConfig.includeTags);
-        }
-        
-        if (firecrawlConfig.excludeTags && firecrawlConfig.excludeTags.length > 0) {
-          firecrawlPayload.excludeTags = firecrawlConfig.excludeTags;
-          console.log("Excluding tags:", firecrawlConfig.excludeTags);
+        // Add extract configuration if using extract format
+        if (firecrawlConfig.formats && firecrawlConfig.formats.includes("extract")) {
+          if (firecrawlConfig.extract && firecrawlConfig.extract.schema) {
+            firecrawlPayload.extract = firecrawlConfig.extract;
+            console.log("Using extract configuration:", JSON.stringify(firecrawlPayload.extract, null, 2));
+          } else {
+            console.error("Extract format specified but no extract.schema provided");
+            // Fallback to markdown if extract is malformed
+            firecrawlPayload.formats = ["markdown"];
+            delete firecrawlPayload.extract;
+          }
         }
 
-        // Add extraction schema if provided
-        if (extractionSchema && Object.keys(extractionSchema).length > 0) {
-          firecrawlPayload.extract = {
-            schema: extractionSchema
-          };
-          console.log("Using extraction schema:", JSON.stringify(extractionSchema, null, 2));
+        // Add optional configuration for non-extract formats
+        if (!firecrawlPayload.formats.includes("extract")) {
+          if (firecrawlConfig.includeTags && firecrawlConfig.includeTags.length > 0) {
+            firecrawlPayload.includeTags = firecrawlConfig.includeTags;
+            console.log("Including tags:", firecrawlConfig.includeTags);
+          }
+          
+          if (firecrawlConfig.excludeTags && firecrawlConfig.excludeTags.length > 0) {
+            firecrawlPayload.excludeTags = firecrawlConfig.excludeTags;
+            console.log("Excluding tags:", firecrawlConfig.excludeTags);
+          }
         }
 
         console.log("Final Firecrawl payload:", JSON.stringify(firecrawlPayload, null, 2));
@@ -158,72 +164,127 @@ Deno.serve(async (req: Request) => {
         const firecrawlData = await firecrawlResponse.json();
         console.log("Firecrawl response data:", JSON.stringify(firecrawlData, null, 2));
         
-        // Process the response
+        // Process the response based on format used
         let extractedData = null;
         let processedData = [];
         
-        // Check if we have extraction schema results
+        // Check if we have extraction schema results (extract format)
         if (firecrawlData.data?.extract) {
           console.log("Found extracted data:", JSON.stringify(firecrawlData.data.extract, null, 2));
           extractedData = firecrawlData.data.extract;
           
           // Process extracted data
           if (Array.isArray(extractedData)) {
-            processedData = extractedData;
+            processedData = extractedData.map((item, index) => ({
+              ...item,
+              _index: index,
+              _source: 'extracted',
+              _url: url
+            }));
             totalItemsExtracted += extractedData.length;
-          } else if (typeof extractedData === 'object') {
+          } else if (typeof extractedData === 'object' && extractedData !== null) {
             // Flatten object properties that are arrays
             Object.entries(extractedData).forEach(([key, value]) => {
               if (Array.isArray(value)) {
-                processedData.push(...value.map(item => ({ ...item, _source: key })));
+                const items = value.map((item, index) => ({
+                  ...item,
+                  _index: index,
+                  _source: key,
+                  _url: url
+                }));
+                processedData.push(...items);
                 totalItemsExtracted += value.length;
               } else if (value && typeof value === 'object') {
-                processedData.push({ ...value, _source: key });
+                processedData.push({ 
+                  ...value, 
+                  _source: key,
+                  _url: url
+                });
                 totalItemsExtracted += 1;
-              } else {
-                processedData.push({ [key]: value, _source: 'extracted' });
+              } else if (value !== null && value !== undefined) {
+                processedData.push({ 
+                  [key]: value, 
+                  _source: 'extracted',
+                  _url: url
+                });
                 totalItemsExtracted += 1;
               }
             });
           } else {
-            processedData = [{ content: extractedData, _source: 'extracted' }];
+            processedData = [{ 
+              content: extractedData, 
+              _source: 'extracted',
+              _url: url
+            }];
             totalItemsExtracted += 1;
           }
         } 
-        // Fallback to markdown/html content if no extraction
+        // Fallback to markdown/html content processing
         else if (firecrawlData.data?.markdown || firecrawlData.data?.html) {
-          console.log("No extracted data, using raw content");
+          console.log("No extracted data, processing raw content");
           const content = firecrawlData.data.markdown || firecrawlData.data.html;
           
-          // Try to extract meaningful data from markdown/html
+          // Enhanced content processing for markdown
           if (firecrawlData.data.markdown) {
-            // Simple markdown parsing for common elements
             const lines = content.split('\n').filter(line => line.trim());
             const extractedItems = [];
             
-            for (const line of lines) {
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i].trim();
+              
+              // Extract headings
               if (line.startsWith('#')) {
-                extractedItems.push({
-                  type: 'heading',
-                  content: line.replace(/^#+\s*/, ''),
-                  level: (line.match(/^#+/) || [''])[0].length,
-                  url: url
-                });
-              } else if (line.includes('http')) {
-                const urlMatch = line.match(/https?:\/\/[^\s)]+/g);
-                if (urlMatch) {
+                const level = (line.match(/^#+/) || [''])[0].length;
+                const title = line.replace(/^#+\s*/, '');
+                if (title.length > 0) {
                   extractedItems.push({
-                    type: 'link',
-                    content: line,
-                    urls: urlMatch,
-                    source_url: url
+                    type: 'heading',
+                    title: title,
+                    level: level,
+                    url: url,
+                    _index: extractedItems.length
                   });
                 }
-              } else if (line.trim().length > 20) {
+              }
+              // Extract links
+              else if (line.includes('http')) {
+                const urlMatches = line.match(/\[([^\]]*)\]\(([^)]+)\)/g);
+                if (urlMatches) {
+                  urlMatches.forEach(match => {
+                    const linkMatch = match.match(/\[([^\]]*)\]\(([^)]+)\)/);
+                    if (linkMatch) {
+                      extractedItems.push({
+                        type: 'link',
+                        title: linkMatch[1] || 'Link',
+                        url: linkMatch[2],
+                        source_url: url,
+                        _index: extractedItems.length
+                      });
+                    }
+                  });
+                } else {
+                  // Extract plain URLs
+                  const plainUrls = line.match(/https?:\/\/[^\s)]+/g);
+                  if (plainUrls) {
+                    plainUrls.forEach(plainUrl => {
+                      extractedItems.push({
+                        type: 'url',
+                        url: plainUrl,
+                        context: line,
+                        source_url: url,
+                        _index: extractedItems.length
+                      });
+                    });
+                  }
+                }
+              }
+              // Extract meaningful text content
+              else if (line.length > 20 && !line.startsWith('*') && !line.startsWith('-')) {
                 extractedItems.push({
                   type: 'text',
-                  content: line.trim(),
-                  source_url: url
+                  content: line,
+                  source_url: url,
+                  _index: extractedItems.length
                 });
               }
             }
@@ -233,16 +294,17 @@ Deno.serve(async (req: Request) => {
           } else {
             // Fallback for HTML content
             processedData = [{
-              content: content,
+              type: 'raw_content',
+              content: content.substring(0, 1000), // Limit content length
               url: url,
               title: firecrawlData.data.metadata?.title,
               description: firecrawlData.data.metadata?.description,
-              type: 'raw_content'
+              _index: 0
             }];
             totalItemsExtracted += 1;
           }
         } else {
-          console.log("No usable data found in response");
+          console.log("No usable data found in Firecrawl response");
           processedData = [];
         }
 
@@ -259,7 +321,8 @@ Deno.serve(async (req: Request) => {
               sourceURL: url,
               scrapedAt: new Date().toISOString(),
               userQuery: userQuery,
-              itemCount: processedData.length
+              itemCount: processedData.length,
+              format: firecrawlPayload.formats[0]
             },
             raw: {
               markdown: firecrawlData.data?.markdown,
@@ -294,7 +357,12 @@ Deno.serve(async (req: Request) => {
     console.log("Successful scrapes:", successfulScrapes);
     console.log("Failed scrapes:", failedScrapes);
     console.log("Total items extracted:", totalItemsExtracted);
-    console.log("Results:", JSON.stringify(results, null, 2));
+    console.log("Results summary:", results.map(r => ({
+      url: r.url,
+      success: r.success,
+      itemCount: r.success ? r.data?.extract?.length || 0 : 0,
+      error: r.error
+    })));
     console.log("=== EXECUTE SCRAPE DEBUG END ===");
 
     const response: ExecuteScrapeResponse = {

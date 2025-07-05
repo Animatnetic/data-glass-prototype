@@ -59,22 +59,46 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. You must understand user intent and map common terms to appropriate HTML elements.
+    const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. 
 
-Analyze the user's natural language query and convert it to a Firecrawl configuration.
+CRITICAL: You must follow the exact Firecrawl API v1 specification:
 
-Response format (return ONLY this JSON, nothing else):
+1. When using "extract" format, you MUST provide an "extract" object with a "schema" property
+2. The schema must be a valid JSON schema object
+3. Available formats: ["markdown", "html", "rawHtml", "extract", "screenshot"]
+4. If using "extract" format, do NOT include "markdown" or "html" in formats array
+5. If NOT using extract, use ["markdown"] or ["html"] formats
+
+EXAMPLES OF CORRECT CONFIGURATIONS:
+
+For structured data extraction (products, articles, etc.):
 {
   "firecrawlConfig": {
-    "formats": ["markdown"],
+    "formats": ["extract"],
     "onlyMainContent": true,
-    "includeTags": ["h1", "h2", "h3", "p", "a"],
-    "excludeTags": ["script", "style", "nav", "footer"]
+    "extract": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "url": {"type": "string"},
+                "description": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "extractionSchema": {
     "type": "object",
     "properties": {
-      "items": {
+      "articles": {
         "type": "array",
         "items": {
           "type": "object",
@@ -89,19 +113,39 @@ Response format (return ONLY this JSON, nothing else):
   }
 }
 
-Focus on:
-- Extracting the specific data the user wants
-- Using appropriate selectors and formats
-- Creating structured schemas for complex data
-- Optimizing for the content type (news, products, contacts, etc.)
-- RETURN ONLY VALID JSON, NO MARKDOWN OR EXPLANATIONS`;
+For simple content extraction:
+{
+  "firecrawlConfig": {
+    "formats": ["markdown"],
+    "onlyMainContent": true,
+    "includeTags": ["h1", "h2", "h3", "p", "a"],
+    "excludeTags": ["script", "style", "nav", "footer"]
+  },
+  "extractionSchema": null
+}
 
-    const userPrompt = `Convert this natural language query into Firecrawl configuration:
+MAPPING GUIDE:
+- "headlines", "titles", "news" → extract h1, h2, h3 tags
+- "links", "urls" → extract a tags with href
+- "products", "items", "listings" → structured extraction with name, price, description
+- "contact info", "emails", "phones" → extract contact-related text
+- "images", "photos" → extract img tags with src and alt
+- "prices", "costs" → extract price-related text and numbers
+- "descriptions", "content", "text" → extract p, div text content
+
+RESPONSE FORMAT (return ONLY valid JSON):`;
+
+    const userPrompt = `Convert this natural language query into a Firecrawl configuration:
 
 Query: "${userQuery}"
 Target URLs: ${urls.join(", ")}
 
-Return only the JSON configuration, no explanations or markdown formatting.`;
+Analyze the query and determine:
+1. What specific data elements are being requested
+2. Whether structured extraction is needed (use "extract" format) or simple content (use "markdown" format)
+3. Appropriate HTML selectors and schema properties
+
+Return ONLY the JSON configuration, no explanations.`;
 
     console.log("Making OpenAI API request...");
 
@@ -124,7 +168,7 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
           }
         ],
         temperature: 0.1,
-        max_tokens: 1500
+        max_tokens: 2000
       }),
     });
 
@@ -171,68 +215,40 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
       );
     }
 
-    console.log("ChatGPT response content:", assistantMessage);
-
-    // Log the raw response for debugging
-    console.log("=== CHATGPT DEBUG INFO ===");
-    console.log("Raw response length:", assistantMessage.length);
-    console.log("Raw response (first 500 chars):", assistantMessage.substring(0, 500));
-    console.log("Raw response (full):", assistantMessage);
-    console.log("Response starts with:", assistantMessage.substring(0, 20));
-    console.log("Response ends with:", assistantMessage.substring(assistantMessage.length - 20));
-    console.log("Contains 'firecrawlConfig':", assistantMessage.includes('firecrawlConfig'));
-    console.log("Contains 'extractionSchema':", assistantMessage.includes('extractionSchema'));
-    console.log("=== END DEBUG INFO ===");
+    console.log("=== CHATGPT RESPONSE DEBUG ===");
+    console.log("Raw ChatGPT response:", assistantMessage);
+    console.log("Response length:", assistantMessage.length);
+    console.log("=== END CHATGPT DEBUG ===");
 
     // Parse the JSON response from ChatGPT
     let parsedConfig;
     try {
       // Clean the response - remove any markdown formatting
       let cleanedResponse = assistantMessage.trim();
-      console.log("Cleaned response (before markdown removal):", cleanedResponse);
       
       // Remove markdown code blocks if present
       if (cleanedResponse.startsWith('```json')) {
         cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        console.log("Removed ```json markdown blocks");
       } else if (cleanedResponse.startsWith('```')) {
         cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
-        console.log("Removed ``` markdown blocks");
       }
       
-      console.log("Final cleaned response:", cleanedResponse);
-      console.log("Attempting to parse JSON...");
+      console.log("Cleaned response for parsing:", cleanedResponse);
       
       parsedConfig = JSON.parse(cleanedResponse);
-      console.log("JSON parsing successful!");
-      console.log("Parsed config:", JSON.stringify(parsedConfig, null, 2));
+      console.log("Successfully parsed ChatGPT response:", JSON.stringify(parsedConfig, null, 2));
     } catch (parseError) {
       console.error("JSON parse error:", parseError);
-      console.error("Raw response:", assistantMessage);
-      console.error("Parse error details:", {
-        message: parseError.message,
-        name: parseError.name,
-        stack: parseError.stack
-      });
+      console.error("Raw response that failed to parse:", assistantMessage);
       
       // Try to extract JSON from the response using regex
-      console.log("Attempting regex extraction...");
       const jsonMatch = assistantMessage.match(/\{[\s\S]*\}/);
-      console.log("Regex match found:", !!jsonMatch);
-      if (jsonMatch) {
-        console.log("Extracted JSON:", jsonMatch[0]);
-      }
-      
       if (jsonMatch) {
         try {
           parsedConfig = JSON.parse(jsonMatch[0]);
           console.log("Regex extraction successful:", parsedConfig);
         } catch (secondParseError) {
           console.error("Second parse attempt failed:", secondParseError);
-          console.error("Second parse error details:", {
-            message: secondParseError.message,
-            extractedText: jsonMatch[0]
-          });
           return new Response(
             JSON.stringify({ 
               error: "Could not parse ChatGPT response as JSON",
@@ -265,14 +281,9 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
       }
     }
 
-    // Validate the parsed configuration
+    // Validate and fix the configuration
     if (!parsedConfig || typeof parsedConfig !== 'object') {
-      console.error("Configuration validation failed:", {
-        parsedConfig,
-        type: typeof parsedConfig,
-        isNull: parsedConfig === null,
-        isUndefined: parsedConfig === undefined
-      });
+      console.error("Invalid configuration from ChatGPT:", parsedConfig);
       return new Response(
         JSON.stringify({ 
           error: "Invalid configuration format from ChatGPT",
@@ -285,26 +296,53 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
       );
     }
 
-    // Provide defaults if missing
-    console.log("Applying defaults and creating final response...");
-    console.log("Original firecrawlConfig:", parsedConfig.firecrawlConfig);
-    console.log("Original extractionSchema:", parsedConfig.extractionSchema);
-    
-    const response: ConvertQueryResponse = {
-      firecrawlConfig: parsedConfig.firecrawlConfig || {
-        formats: ["markdown"],
-        onlyMainContent: true
-      },
-      extractionSchema: parsedConfig.extractionSchema || {
-        type: "object",
-        properties: {
-          content: { type: "string" }
-        }
+    // Ensure proper Firecrawl configuration structure
+    let firecrawlConfig = parsedConfig.firecrawlConfig || {};
+    let extractionSchema = parsedConfig.extractionSchema;
+
+    // Validate formats and extract configuration
+    if (firecrawlConfig.formats && firecrawlConfig.formats.includes("extract")) {
+      // If using extract format, ensure extract object exists
+      if (!firecrawlConfig.extract || !firecrawlConfig.extract.schema) {
+        console.log("Extract format specified but no extract.schema found, adding default");
+        firecrawlConfig.extract = {
+          schema: extractionSchema || {
+            type: "object",
+            properties: {
+              content: { type: "string" }
+            }
+          }
+        };
       }
+      
+      // Remove other formats when using extract
+      firecrawlConfig.formats = ["extract"];
+    } else {
+      // If not using extract, ensure we have basic formats
+      if (!firecrawlConfig.formats || firecrawlConfig.formats.length === 0) {
+        firecrawlConfig.formats = ["markdown"];
+      }
+      
+      // Remove extract object if not using extract format
+      if (firecrawlConfig.extract) {
+        delete firecrawlConfig.extract;
+      }
+    }
+
+    // Set defaults
+    if (firecrawlConfig.onlyMainContent === undefined) {
+      firecrawlConfig.onlyMainContent = true;
+    }
+
+    console.log("Final validated firecrawlConfig:", JSON.stringify(firecrawlConfig, null, 2));
+    console.log("Final extractionSchema:", JSON.stringify(extractionSchema, null, 2));
+
+    const response: ConvertQueryResponse = {
+      firecrawlConfig: firecrawlConfig,
+      extractionSchema: extractionSchema
     };
 
-    console.log("Final response object:", JSON.stringify(response, null, 2));
-    console.log("Returning successful response:", response);
+    console.log("Returning response:", JSON.stringify(response, null, 2));
 
     return new Response(
       JSON.stringify(response),
