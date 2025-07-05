@@ -65,8 +65,13 @@ Firecrawl Documentation Summary:
 - Use /scrape endpoint for single URLs
 - Extract options: "markdown", "html", "rawHtml", "screenshot"
 - Schema extraction using JSON schema for structured data
-- Selectors can target specific elements
 - Rate limiting and concurrent requests supported
+- Convert the users natural english text into corresponding html tags even if they do not input the technical name for it.
+
+For example:
+titles corresponds to either <h1>, <h2>, etc
+links corresponds to <a>
+image corresponds to <img>
 
 Your task:
 1. Analyze the user's natural language query
