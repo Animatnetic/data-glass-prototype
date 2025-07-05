@@ -184,31 +184,66 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
 
     console.log("ChatGPT response content:", assistantMessage);
 
+    // Log the raw response for debugging
+    console.log("=== CHATGPT DEBUG INFO ===");
+    console.log("Raw response length:", assistantMessage.length);
+    console.log("Raw response (first 500 chars):", assistantMessage.substring(0, 500));
+    console.log("Raw response (full):", assistantMessage);
+    console.log("Response starts with:", assistantMessage.substring(0, 20));
+    console.log("Response ends with:", assistantMessage.substring(assistantMessage.length - 20));
+    console.log("Contains 'firecrawlConfig':", assistantMessage.includes('firecrawlConfig'));
+    console.log("Contains 'extractionSchema':", assistantMessage.includes('extractionSchema'));
+    console.log("=== END DEBUG INFO ===");
+
     // Parse the JSON response from ChatGPT
     let parsedConfig;
     try {
       // Clean the response - remove any markdown formatting
       let cleanedResponse = assistantMessage.trim();
+      console.log("Cleaned response (before markdown removal):", cleanedResponse);
       
       // Remove markdown code blocks if present
       if (cleanedResponse.startsWith('```json')) {
         cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        console.log("Removed ```json markdown blocks");
       } else if (cleanedResponse.startsWith('```')) {
         cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        console.log("Removed ``` markdown blocks");
       }
       
+      console.log("Final cleaned response:", cleanedResponse);
+      console.log("Attempting to parse JSON...");
+      
       parsedConfig = JSON.parse(cleanedResponse);
+      console.log("JSON parsing successful!");
+      console.log("Parsed config:", JSON.stringify(parsedConfig, null, 2));
     } catch (parseError) {
       console.error("JSON parse error:", parseError);
       console.error("Raw response:", assistantMessage);
+      console.error("Parse error details:", {
+        message: parseError.message,
+        name: parseError.name,
+        stack: parseError.stack
+      });
       
       // Try to extract JSON from the response using regex
+      console.log("Attempting regex extraction...");
       const jsonMatch = assistantMessage.match(/\{[\s\S]*\}/);
+      console.log("Regex match found:", !!jsonMatch);
+      if (jsonMatch) {
+        console.log("Extracted JSON:", jsonMatch[0]);
+      }
+      
       if (jsonMatch) {
         try {
           parsedConfig = JSON.parse(jsonMatch[0]);
+          console.log("Regex extraction successful:", parsedConfig);
         } catch (secondParseError) {
           console.error("Second parse attempt failed:", secondParseError);
+          console.error("Second parse error details:", {
+            message: secondParseError.message,
+            extractedText: jsonMatch[0]
+          });
           return new Response(
             JSON.stringify({ 
               error: "Could not parse ChatGPT response as JSON",
@@ -243,6 +278,12 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
 
     // Validate the parsed configuration
     if (!parsedConfig || typeof parsedConfig !== 'object') {
+      console.error("Configuration validation failed:", {
+        parsedConfig,
+        type: typeof parsedConfig,
+        isNull: parsedConfig === null,
+        isUndefined: parsedConfig === undefined
+      });
       return new Response(
         JSON.stringify({ 
           error: "Invalid configuration format from ChatGPT",
@@ -256,6 +297,10 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
     }
 
     // Provide defaults if missing
+    console.log("Applying defaults and creating final response...");
+    console.log("Original firecrawlConfig:", parsedConfig.firecrawlConfig);
+    console.log("Original extractionSchema:", parsedConfig.extractionSchema);
+    
     const response: ConvertQueryResponse = {
       firecrawlConfig: parsedConfig.firecrawlConfig || {
         formats: ["markdown"],
@@ -269,6 +314,7 @@ Return only the JSON configuration, no explanations or markdown formatting.`;
       }
     };
 
+    console.log("Final response object:", JSON.stringify(response, null, 2));
     console.log("Returning successful response:", response);
 
     return new Response(
