@@ -78,13 +78,13 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                           <div className="flex items-center space-x-2 mb-2">
                             <ExternalLink className="w-4 h-4 text-white/40 flex-shrink-0" />
                             <p className="text-white/80 text-sm font-medium truncate">
-                              {record.target_urls.length > 1 
-                                ? `${record.target_urls.length} URLs` 
-                                : record.target_urls[0] ? (() => {
+                              {(record.target_urls || []).length > 1 
+                                ? `${(record.target_urls || []).length} URLs` 
+                                : (record.target_urls || [])[0] ? (() => {
                                     try {
-                                      return new URL(record.target_urls[0]).hostname;
+                                      return new URL((record.target_urls || [])[0]).hostname;
                                     } catch {
-                                      return record.target_urls[0];
+                                      return (record.target_urls || [])[0];
                                     }
                                   })() : 'Unknown URL'}
                             </p>
