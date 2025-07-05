@@ -50,6 +50,8 @@ export const useLocalHistory = () => {
     results: any[] = [],
     previewData: any[] = []
   ) => {
+    setLoading(true);
+    
     const newScrape: LocalScrapeRecord = {
       id: `scrape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       target_urls: targetUrls,
@@ -65,6 +67,7 @@ export const useLocalHistory = () => {
     const updatedScrapes = [newScrape, ...scrapes].slice(0, 50); // Keep only last 50 scrapes
     setScrapes(updatedScrapes);
     saveToStorage(updatedScrapes);
+    setLoading(false);
 
     return { data: newScrape, error: null };
   };

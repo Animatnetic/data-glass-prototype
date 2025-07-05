@@ -59,7 +59,8 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
               <div className="flex-1 overflow-y-auto space-y-3">
                 {history.length === 0 ? (
                   <div className="text-center py-8 text-white/50">
-                    No scrapes yet
+                    <p>No scrapes yet</p>
+                    <p className="text-xs mt-2 opacity-75">Your scraping history will appear here</p>
                   </div>
                 ) : (
                   history.map((record) => (
