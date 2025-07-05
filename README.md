@@ -28,6 +28,9 @@ DataGlass is a modern, serverless web scraping application built with React and 
 
 3. Set up Supabase:
    - Create a new Supabase project
+   - Go to your Supabase project dashboard
+   - Navigate to 'Project Settings' -> 'API'
+   - Copy your Project URL and anon/public key
    - Run the SQL migration in `supabase/migrations/create_scrapes_table.sql`
    - Deploy the Edge Functions:
      ```bash
@@ -39,7 +42,11 @@ DataGlass is a modern, serverless web scraping application built with React and 
    ```bash
    cp .env.example .env
    ```
-   Fill in your Supabase URL and anon key.
+   Open the `.env` file and replace the placeholder values:
+   - `VITE_SUPABASE_URL`: Your Supabase project URL (found in Project Settings -> API)
+   - `VITE_SUPABASE_ANON_KEY`: Your Supabase anon/public key (found in Project Settings -> API)
+   
+   **Important**: After updating the `.env` file, restart your development server with `npm run dev`
 
 5. Start the development server:
    ```bash
