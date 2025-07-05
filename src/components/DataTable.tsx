@@ -69,8 +69,9 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
-      <div className="text-center py-8 text-white/60">
-        No data available
+        <div className="text-center py-8 text-white/60">
+          No data available
+        </div>
       </div>
     );
   }
