@@ -29,35 +29,7 @@ const mockData = [
   { title: "Space Mission Discovers New Exoplanet", url: "https://example.com/news5", category: "Space", date: "2024-01-11" }
 ];
 
-const mockHistory = [
-  { 
-    id: '1', 
-    target_url: 'https://bbc.com', 
-    user_query: 'headlines', 
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), 
-    status: 'completed',
-    results: mockData,
-    preview_data: mockData.slice(0, 3)
-  },
-  { 
-    id: '2', 
-    target_url: 'https://techcrunch.com', 
-    user_query: 'startup funding news', 
-    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), 
-    status: 'completed',
-    results: mockData,
-    preview_data: mockData.slice(0, 3)
-  },
-  { 
-    id: '3', 
-    target_url: 'https://reuters.com', 
-    user_query: 'market data', 
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), 
-    status: 'completed',
-    results: mockData,
-    preview_data: mockData.slice(0, 3)
-  },
-];
+const mockHistory: any[] = [];
 
 type ViewMode = 'table' | 'json';
 

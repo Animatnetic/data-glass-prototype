@@ -49,35 +49,8 @@ Deno.serve(async (req: Request) => {
       console.error("OpenAI API key not found in environment");
       return new Response(
         JSON.stringify({ 
-          error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your Supabase edge function secrets.",
-          debug: { hasApiKey: false }
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
 
-    const systemPrompt = `You are a web scraping expert that converts natural language queries into Firecrawl API configurations.
-
-Firecrawl Documentation Summary:
-- Use /scrape endpoint for single URLs
-- Extract options: "markdown", "html", "rawHtml", "screenshot"
-- Schema extraction using JSON schema for structured data
-- Rate limiting and concurrent requests supported
-- Convert the users natural english text into corresponding html tags even if they do not input the technical name for it.
-
-For example:
-titles corresponds to either <h1>, <h2>, etc
-links corresponds to <a>
-image corresponds to <img>
-
-Your task:
 1. Analyze the user's natural language query
-2. Determine the best Firecrawl configuration
-3. Create a JSON schema for data extraction if structured data is requested
-4. Return ONLY a valid JSON object (no markdown, no explanations)
 
 Response format (return ONLY this JSON, nothing else):
 {
@@ -111,6 +84,7 @@ Focus on:
 - Creating structured schemas for complex data
 - Optimizing for the content type (news, products, contacts, etc.)
 - RETURN ONLY VALID JSON, NO MARKDOWN OR EXPLANATIONS`;
+    const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. You must understand user intent and map common terms to appropriate HTML elements.
 
     const userPrompt = `Convert this natural language query into Firecrawl configuration:
 
