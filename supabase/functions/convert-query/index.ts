@@ -49,6 +49,17 @@ Deno.serve(async (req: Request) => {
       console.error("OpenAI API key not found in environment");
       return new Response(
         JSON.stringify({ 
+          error: "OpenAI API key not found",
+          debug: { env: Deno.env.toObject() }
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. You must understand user intent and map common terms to appropriate HTML elements.
 
 1. Analyze the user's natural language query
 
@@ -80,11 +91,10 @@ Response format (return ONLY this JSON, nothing else):
 
 Focus on:
 - Extracting the specific data the user wants
-- Using appropriate selectors and formats
+- Using approp\riate selectors and formats
 - Creating structured schemas for complex data
 - Optimizing for the content type (news, products, contacts, etc.)
 - RETURN ONLY VALID JSON, NO MARKDOWN OR EXPLANATIONS`;
-    const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. You must understand user intent and map common terms to appropriate HTML elements.
 
     const userPrompt = `Convert this natural language query into Firecrawl configuration:
 
