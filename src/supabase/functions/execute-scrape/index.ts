@@ -442,7 +442,12 @@ Deno.serve(async (req: Request) => {
             success: false,
             error: `Firecrawl API error (${firecrawlResponse.status}): ${errorText}`
           });
-          continue;
+          return {
+            url: url,
+            data: null,
+            success: false,
+            error: `Firecrawl API error (${firecrawlResponse.status}): ${errorText}`
+          };
         }
 
         const firecrawlData = await firecrawlResponse.json();
