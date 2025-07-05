@@ -1,6 +1,6 @@
 # DataGlass - Intelligent Web Scraping Platform
 
-DataGlass is a modern, serverless web scraping application built with React, Supabase, and Edge Functions. It allows users to extract data from any website using natural language queries.
+DataGlass is a modern, serverless web scraping application built with React and Supabase. It allows users to extract data from any website using natural language queries.
 
 ## Features
 
