@@ -116,19 +116,19 @@ function App() {
     setResult(null);
 
     try {
-      // Check if Supabase Edge Functions are available
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+      // Check if Edge Functions are available
+      const edgeFunctionUrl = import.meta.env.VITE_EDGE_FUNCTION_URL || '';
+      const edgeFunctionKey = import.meta.env.VITE_EDGE_FUNCTION_KEY || '';
       
       let useEdgeFunctions = false;
       
-      if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'your_supabase_url' && supabaseAnonKey !== 'your_supabase_anon_key') {
+      if (edgeFunctionUrl && edgeFunctionKey) {
         // Test if Edge Functions are available
         try {
-          const testResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
+          const testResponse = await fetch(`${edgeFunctionUrl}/convert-query`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Authorization': `Bearer ${edgeFunctionKey}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ test: true }),
@@ -143,13 +143,13 @@ function App() {
       }
 
       if (useEdgeFunctions) {
-        // Use Supabase Edge Functions
-        console.log('Using Supabase Edge Functions for scraping...');
+        // Use Edge Functions
+        console.log('Using Edge Functions for scraping...');
         
-        const convertResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
+        const convertResponse = await fetch(`${edgeFunctionUrl}/convert-query`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Authorization': `Bearer ${edgeFunctionKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -165,10 +165,10 @@ function App() {
 
         const { firecrawlConfig, extractionSchema } = await convertResponse.json();
         
-        const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-scrape`, {
+        const scrapeResponse = await fetch(`${edgeFunctionUrl}/execute-scrape`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Authorization': `Bearer ${edgeFunctionKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -222,7 +222,7 @@ function App() {
           specific_data_type: scrapeData.results[0]?.data?.metadata?.specificDataType || null
         });
 
-        // Save to database if user is logged in
+        // Save to local storage
         if (allExtractedData.length > 0) {
           await createScrape(
             validUrls.map(entry => entry.url),

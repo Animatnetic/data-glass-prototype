@@ -32,9 +32,9 @@ DataGlass is a modern web scraping application built with React. It allows users
    ```
 
 4. (Optional) Set up advanced AI-powered scraping:
-   - Deploy the Edge Functions to a serverless platform
-   - Set up environment variables for OpenAI and Firecrawl API keys
-   - Configure the application to use your deployed functions
+   - Deploy the Edge Functions from the `/edge-functions` directory to a serverless platform
+   - Set up environment variables for your deployed functions
+   - Configure VITE_EDGE_FUNCTION_URL and VITE_EDGE_FUNCTION_KEY in your .env file
 
 ## Usage
 
@@ -55,7 +55,7 @@ DataGlass is a modern web scraping application built with React. It allows users
 - Works immediately without any configuration
 
 ### Advanced Mode (Requires Edge Function Setup)
-- AI-powered extraction using OpenAI and Firecrawl
+- AI-powered extraction using deployed Edge Functions
 - Natural language query processing
 - Advanced data processing and extraction
 - Serverless Edge Functions for scalable processing
