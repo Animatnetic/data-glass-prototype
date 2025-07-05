@@ -236,3 +236,5 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+// Testing to see if it automatically updates
