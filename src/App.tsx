@@ -18,7 +18,7 @@ import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
-import { convertTableToMarkdown, generatePDFFromMarkdown, downloadMarkdown } from './utils/pdfGenerator';
+import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
 
 // Mock data for demonstration
 const mockData = [
@@ -262,14 +262,13 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadCSV = () => {
     try {
       const dataToExport = result?.raw_data || mockData;
-      const markdown = convertTableToMarkdown(dataToExport);
-      generatePDFFromMarkdown(markdown, 'scrape_results.pdf');
+      downloadCSV(dataToExport, 'scrape_results.csv');
     } catch (error) {
-      console.error('PDF generation error:', error);
-      setError('Failed to generate PDF. Please try again.');
+      console.error('CSV generation error:', error);
+      setError('Failed to generate CSV. Please try again.');
     }
   };
 
@@ -399,9 +398,9 @@ function App() {
                   {isLoading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <Database className="w-5 h-5" />
+                    <Search className="w-5 h-5" />
                   )}
-                  <span>Submit{validUrlCount > 1 ? ` from ${validUrlCount} URLs` : ''}</span>
+                  <span>Extract Data{validUrlCount > 1 ? ` from ${validUrlCount} URLs` : ''}</span>
                 </button>
 
                 <button
@@ -466,18 +465,18 @@ function App() {
                       <span>JSON</span>
                     </button>
                     <button
-                      onClick={handleDownloadMarkdown}
+                      onClick={handleDownloadCSV}
                       className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
                     >
                       <FileText className="w-4 h-4" />
-                      <span>Markdown</span>
+                      <span>CSV</span>
                     </button>
                     <button
-                      onClick={handleDownloadPDF}
-                      className="flex items-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm"
+                      onClick={handleDownloadMarkdown}
+                      className="flex items-center space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm"
                     >
                       <FileText className="w-4 h-4" />
-                      <span>PDF</span>
+                      <span>Markdown</span>
                     </button>
                   </div>
                 </div>
