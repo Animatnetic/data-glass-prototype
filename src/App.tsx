@@ -335,7 +335,17 @@ function App() {
 
     } catch (error) {
       console.error('Scraping error:', error);
-      setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
+      
+      // Provide more informative error messages based on the scraping mode
+      if (!useEdgeFunctions) {
+        setError(
+          `Scraping failed in fallback mode. The target website may be blocking requests or the CORS proxy is unavailable. ` +
+          `For more reliable scraping with advanced features, please set up Supabase and Edge Functions as described in the README.md. ` +
+          `Error details: ${error.message || 'Network request failed'}`
+        );
+      } else {
+        setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
+      }
     } finally {
       setIsLoading(false);
     }
