@@ -143,6 +143,8 @@ function App() {
 
     try {
       // Step 1: Convert natural language query to Firecrawl configuration
+      console.log('Starting query conversion...', { query, validUrls });
+      
       const convertResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/convert-query`, {
         method: 'POST',
         headers: {
@@ -155,13 +157,20 @@ function App() {
         }),
       });
 
+      console.log('Convert response status:', convertResponse.status);
+      
       if (!convertResponse.ok) {
-        throw new Error('Failed to convert query to Firecrawl configuration');
+        const errorData = await convertResponse.json();
+        console.error('Convert query error:', errorData);
+        throw new Error(`Failed to convert query: ${errorData.error || 'Unknown error'}`);
       }
 
       const { firecrawlConfig, extractionSchema } = await convertResponse.json();
+      console.log('Conversion successful:', { firecrawlConfig, extractionSchema });
 
       // Step 2: Execute the scraping with Firecrawl
+      console.log('Starting scrape execution...');
+      
       const scrapeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-scrape`, {
         method: 'POST',
         headers: {
@@ -176,11 +185,16 @@ function App() {
         }),
       });
 
+      console.log('Scrape response status:', scrapeResponse.status);
+      
       if (!scrapeResponse.ok) {
-        throw new Error('Failed to execute scraping');
+        const errorData = await scrapeResponse.json();
+        console.error('Scrape execution error:', errorData);
+        throw new Error(`Failed to execute scraping: ${errorData.error || 'Unknown error'}`);
       }
 
       const scrapeData = await scrapeResponse.json();
+      console.log('Scraping successful:', scrapeData);
 
       // Process results for display
       const allExtractedData = [];
@@ -226,7 +240,7 @@ function App() {
 
     } catch (error) {
       console.error('Scraping error:', error);
-      setError(error.message || 'An error occurred during scraping');
+      setError(error.message || 'An error occurred during scraping. Check the console for details.');
     } finally {
       setIsLoading(false);
     }
