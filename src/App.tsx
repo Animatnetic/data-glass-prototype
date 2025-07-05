@@ -117,118 +117,63 @@ function App() {
     const validUrls = urls.filter(entry => entry.url.trim() !== '');
     if (validUrls.length === 0 || !query) return;
 
-    // Check if Supabase environment variables are configured
-    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      setError('Supabase configuration is missing. Please check your environment variables.');
-      return;
-    }
     setIsLoading(true);
     setError(null);
     setResult(null);
-    
-    // Show processing message for multiple URLs
-    if (validUrls.length > 1) {
-      console.log(`Starting concurrent processing of ${validUrls.length} URLs...`);
-    }
 
     try {
       // Step 1: Convert natural language query to Firecrawl configuration
       console.log('Starting query conversion...', { query, validUrls });
-      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
       
-      const convertUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/convert-query`;
-      console.log('Convert URL:', convertUrl);
-      
-      let convertResponse;
-      try {
-        convertResponse = await fetch(convertUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userQuery: query,
-            urls: validUrls.map(entry => entry.url)
-          }),
-        });
-      } catch (fetchError) {
-        console.error('Network error calling convert-query:', fetchError);
-        throw new Error(`Network error: Unable to reach Supabase Edge Function. Please check if the 'convert-query' function is deployed and your Supabase URL is correct.`);
-      }
+      const convertResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/convert-query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userQuery: query,
+          urls: validUrls.map(entry => entry.url)
+        }),
+      });
 
       console.log('Convert response status:', convertResponse.status);
       
       if (!convertResponse.ok) {
-        let errorData;
-        try {
-          errorData = await convertResponse.json();
-        } catch (parseError) {
-          console.error('Failed to parse error response:', parseError);
-          throw new Error(`Edge function error (${convertResponse.status}): Unable to parse response. The 'convert-query' function may not be deployed.`);
-        }
+        const errorData = await convertResponse.json();
         console.error('Convert query error:', errorData);
         throw new Error(`Failed to convert query: ${errorData.error || 'Unknown error'}`);
       }
 
-      let conversionResult;
-      try {
-        conversionResult = await convertResponse.json();
-      } catch (parseError) {
-        console.error('Failed to parse conversion response:', parseError);
-        throw new Error('Invalid response from convert-query function');
-      }
-      
-      const { firecrawlConfig, extractionSchema } = conversionResult;
+      const { firecrawlConfig, extractionSchema } = await convertResponse.json();
       console.log('Conversion successful:', { firecrawlConfig, extractionSchema });
 
       // Step 2: Execute the scraping with Firecrawl
       console.log('Starting scrape execution...');
       
-      const scrapeUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-scrape`;
-      console.log('Scrape URL:', scrapeUrl);
-      
-      let scrapeResponse;
-      try {
-        scrapeResponse = await fetch(scrapeUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            urls: validUrls.map(entry => entry.url),
-            firecrawlConfig,
-            extractionSchema,
-            userQuery: query
-          }),
-        });
-      } catch (fetchError) {
-        console.error('Network error calling execute-scrape:', fetchError);
-        throw new Error(`Network error: Unable to reach Supabase Edge Function. Please check if the 'execute-scrape' function is deployed and your Supabase URL is correct.`);
-      }
+      const scrapeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-scrape`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          urls: validUrls.map(entry => entry.url),
+          firecrawlConfig,
+          extractionSchema,
+          userQuery: query
+        }),
+      });
 
       console.log('Scrape response status:', scrapeResponse.status);
       
       if (!scrapeResponse.ok) {
-        let errorData;
-        try {
-          errorData = await scrapeResponse.json();
-        } catch (parseError) {
-          console.error('Failed to parse scrape error response:', parseError);
-          throw new Error(`Edge function error (${scrapeResponse.status}): Unable to parse response. The 'execute-scrape' function may not be deployed.`);
-        }
+        const errorData = await scrapeResponse.json();
         console.error('Scrape execution error:', errorData);
         throw new Error(`Failed to execute scraping: ${errorData.error || 'Unknown error'}`);
       }
 
-      let scrapeData;
-      try {
-        scrapeData = await scrapeResponse.json();
-      } catch (parseError) {
-        console.error('Failed to parse scrape response:', parseError);
-        throw new Error('Invalid response from execute-scrape function');
-      }
+      const scrapeData = await scrapeResponse.json();
       console.log('Scraping successful:', scrapeData);
 
       // Process results for display
@@ -517,8 +462,8 @@ function App() {
 
           {/* Error State */}
           {error && (
-           <GlassCard className="p-6 border-red-500/20 bg-red-500/10">
-             <div className="text-red-300 text-center">
+            <GlassCard className="p-6 border-red-500/20 bg-red-500/10">
+              <div className="text-red-300 text-center">
                 <p className="font-medium mb-2">Error</p>
                 <p className="text-sm">{error}</p>
               </div>
