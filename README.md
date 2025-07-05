@@ -27,26 +27,22 @@ DataGlass is a modern, serverless web scraping application built with React and 
    ```
 
 3. Set up Supabase:
-   - Create a new Supabase project
-   - Go to your Supabase project dashboard
-   - Navigate to 'Project Settings' -> 'API'
-   - Copy your Project URL and anon/public key
+   - Click the "Connect to Supabase" button in the top right corner of the application
+   - This will automatically configure your Supabase connection
+   - Alternatively, create a new Supabase project manually:
+     - Go to https://supabase.com and create a new project
+     - Navigate to 'Project Settings' -> 'API'
+     - Copy your Project URL and anon/public key
    - Run the SQL migration in `supabase/migrations/create_scrapes_table.sql`
-   - Deploy the Edge Functions:
-     ```bash
-     supabase functions deploy scrape
-     supabase functions deploy generate-pdf
-     ```
+   - Deploy the Edge Functions (convert-query and execute-scrape)
+   - Set up the required secrets in your Supabase project:
+     - OPENAI_API_KEY: Your OpenAI API key
+     - FIRECRAWL_API_KEY: Your Firecrawl API key
 
 4. Configure environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-   Open the `.env` file and replace the placeholder values:
-   - `VITE_SUPABASE_URL`: Your Supabase project URL (found in Project Settings -> API)
-   - `VITE_SUPABASE_ANON_KEY`: Your Supabase anon/public key (found in Project Settings -> API)
-   
-   **Important**: After updating the `.env` file, restart your development server with `npm run dev`
+   If you set up Supabase manually, update the `.env` file with your credentials:
+   - `VITE_SUPABASE_URL`: Your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY`: Your Supabase anon/public key
 
 5. Start the development server:
    ```bash

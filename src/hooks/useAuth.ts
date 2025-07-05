@@ -9,6 +9,13 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check if Supabase is configured
+    if (!supabase) {
+      console.warn('Supabase not configured, skipping auth initialization');
+      setLoading(false);
+      return;
+    }
+
     // Get initial session
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -44,6 +51,8 @@ export const useAuth = () => {
   }, []);
 
   const fetchUserProfile = async (userId: string) => {
+    if (!supabase) return;
+    
     try {
       const { data, error } = await supabase
         .from('user_profiles')
@@ -63,6 +72,10 @@ export const useAuth = () => {
   };
 
   const signUp = async (email: string, password: string, fullName?: string) => {
+    if (!supabase) {
+      return { data: null, error: new Error('Supabase not configured') };
+    }
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -77,6 +90,10 @@ export const useAuth = () => {
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!supabase) {
+      return { data: null, error: new Error('Supabase not configured') };
+    }
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -86,6 +103,10 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
+    if (!supabase) {
+      return { error: new Error('Supabase not configured') };
+    }
+    
     const { error } = await supabase.auth.signOut();
     if (!error) {
       setUser(null);
@@ -96,7 +117,11 @@ export const useAuth = () => {
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) return { error: new Error('No user logged in') };
+    if (!supabase) {
+      return { data: null, error: new Error('Supabase not configured') };
+    }
+    
+    if (!user) return { data: null, error: new Error('No user logged in') };
 
     const { data, error } = await supabase
       .from('user_profiles')

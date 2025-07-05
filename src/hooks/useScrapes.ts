@@ -8,7 +8,7 @@ export const useScrapes = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && supabase) {
       fetchScrapes();
     } else {
       setScrapes([]);
@@ -16,7 +16,7 @@ export const useScrapes = () => {
   }, [user]);
 
   const fetchScrapes = async () => {
-    if (!user) return;
+    if (!user || !supabase) return;
 
     setLoading(true);
     try {
@@ -46,7 +46,11 @@ export const useScrapes = () => {
     results: any[] = [],
     previewData: any[] = []
   ) => {
-    if (!user) return { error: new Error('No user logged in') };
+    if (!supabase) {
+      return { data: null, error: new Error('Supabase not configured') };
+    }
+    
+    if (!user) return { data: null, error: new Error('No user logged in') };
 
     const scrapeData = {
       user_id: user.id,
@@ -75,7 +79,11 @@ export const useScrapes = () => {
     id: string,
     updates: Partial<ScrapeRecord>
   ) => {
-    if (!user) return { error: new Error('No user logged in') };
+    if (!supabase) {
+      return { data: null, error: new Error('Supabase not configured') };
+    }
+    
+    if (!user) return { data: null, error: new Error('No user logged in') };
 
     const { data, error } = await supabase
       .from('scrapes')
@@ -95,6 +103,10 @@ export const useScrapes = () => {
   };
 
   const deleteScrape = async (id: string) => {
+    if (!supabase) {
+      return { error: new Error('Supabase not configured') };
+    }
+    
     if (!user) return { error: new Error('No user logged in') };
 
     const { error } = await supabase

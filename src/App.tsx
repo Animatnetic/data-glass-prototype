@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useScrapes } from './hooks/useScrapes';
+import { supabase } from './lib/supabase';
 import { DataTable } from './components/DataTable';
 import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
@@ -117,6 +118,12 @@ function App() {
     const validUrls = urls.filter(entry => entry.url.trim() !== '');
     if (validUrls.length === 0 || !query) return;
 
+    // Check if Supabase is configured
+    if (!supabase) {
+      setError('Supabase is not configured. Please set up your Supabase project credentials in the .env file.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -125,10 +132,17 @@ function App() {
       // Step 1: Convert natural language query to Firecrawl configuration
       console.log('Starting query conversion...', { query, validUrls });
       
-      const convertResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/convert-query`, {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your_supabase_url' || supabaseAnonKey === 'your_supabase_anon_key') {
+        throw new Error('Supabase environment variables are not properly configured. Please check your .env file.');
+      }
+      
+      const convertResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -151,10 +165,10 @@ function App() {
       // Step 2: Execute the scraping with Firecrawl
       console.log('Starting scrape execution...');
       
-      const scrapeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-scrape`, {
+      const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-scrape`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -232,7 +246,11 @@ function App() {
 
     } catch (error) {
       console.error('Scraping error:', error);
-      setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
+      if (error.message?.includes('Failed to fetch')) {
+        setError('Unable to connect to Supabase Edge Functions. Please ensure your Supabase project is properly configured and the Edge Functions are deployed.');
+      } else {
+        setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -432,12 +450,13 @@ function App() {
                 <button
                   onClick={() => setIsHistoryOpen(true)}
                   className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-                  disabled={!user}
-                  title={!user ? "Sign in to view history" : "View scrape history"}
+                  disabled={!user || !supabase}
+                  title={!supabase ? "Supabase not configured" : !user ? "Sign in to view history" : "View scrape history"}
                 >
                   <History className="w-5 h-5" />
                   <span>History</span>
-                  {!user && <span className="text-xs opacity-60">(Sign in required)</span>}
+                  {!supabase && <span className="text-xs opacity-60">(Setup required)</span>}
+                  {supabase && !user && <span className="text-xs opacity-60">(Sign in required)</span>}
                 </button>
 
                 {result && (
