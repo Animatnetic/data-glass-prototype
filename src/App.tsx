@@ -7,63 +7,22 @@ import {
   History,
   RefreshCw,
   ExternalLink,
-  Database,
-  Clock,
-  X,
+  LogIn,
   Plus,
   Trash2
 } from 'lucide-react';
+import { useAuth } from './hooks/useAuth';
+import { useScrapes } from './hooks/useScrapes';
 import { DataTable } from './components/DataTable';
 import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
+import { AuthModal } from './components/AuthModal';
+import { UserMenu } from './components/UserMenu';
 import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
+import { ScrapeRecord } from './lib/supabase';
 
-// History management utilities
-const HISTORY_STORAGE_KEY = 'dataglass_scrape_history';
-
-interface ScrapeRecord {
-  id: string;
-  created_at: string;
-  target_url: string;
-  user_query: string;
-  results: any[];
-  preview_data: any[];
-  status: string;
-  error_message?: string;
-}
-
-const loadHistoryFromStorage = (): ScrapeRecord[] => {
-  try {
-    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Error loading history from localStorage:', error);
-    return [];
-  }
-};
-
-const saveHistoryToStorage = (history: ScrapeRecord[]): void => {
-  try {
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-  } catch (error) {
-    console.error('Error saving history to localStorage:', error);
-  }
-};
-
-const addToHistory = (record: ScrapeRecord): void => {
-  const history = loadHistoryFromStorage();
-  const updatedHistory = [record, ...history].slice(0, 50); // Keep only last 50 records
-  saveHistoryToStorage(updatedHistory);
-};
-
-const removeFromHistory = (id: string): ScrapeRecord[] => {
-  const history = loadHistoryFromStorage();
-  const updatedHistory = history.filter(record => record.id !== id);
-  saveHistoryToStorage(updatedHistory);
-  return updatedHistory;
-};
 
 // Mock data for demonstration
 const mockData = [
@@ -74,7 +33,6 @@ const mockData = [
   { title: "Space Mission Discovers New Exoplanet", url: "https://example.com/news5", category: "Space", date: "2024-01-11" }
 ];
 
-const mockHistory: any[] = [];
 
 type ViewMode = 'table' | 'json';
 
@@ -84,6 +42,9 @@ interface UrlEntry {
 }
 
 function App() {
+  const { user, loading: authLoading } = useAuth();
+  const { scrapes, createScrape, deleteScrape } = useScrapes();
+  
   const [urls, setUrls] = useState<UrlEntry[]>([{ id: '1', url: '' }]);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -91,19 +52,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<ScrapeRecord[]>([]);
-
-  // Load history on component mount
-  React.useEffect(() => {
-    setHistory(loadHistoryFromStorage());
-  }, []);
-
-  // Clear history on session close (when component unmounts)
-  React.useEffect(() => {
-    return () => {
-      localStorage.removeItem(HISTORY_STORAGE_KEY);
-    };
-  }, []);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const addUrl = () => {
     const newId = Date.now().toString();
@@ -268,18 +217,15 @@ function App() {
 
       // Add successful scrape to history
       if (allExtractedData.length > 0) {
-        const historyRecord: ScrapeRecord = {
-          id: `scrape-${Date.now()}`,
-          created_at: new Date().toISOString(),
-          target_url: validUrls.length === 1 ? validUrls[0].url : `${validUrls.length} URLs`,
-          user_query: query,
-          results: allExtractedData,
-          preview_data: allExtractedData.slice(0, 3),
-          status: 'completed'
-        };
-        
-        addToHistory(historyRecord);
-        setHistory(loadHistoryFromStorage());
+        // Save to database if user is logged in
+        if (user) {
+          await createScrape(
+            validUrls.map(entry => entry.url),
+            query,
+            allExtractedData,
+            allExtractedData.slice(0, 3)
+          );
+        }
       }
 
     } catch (error) {
@@ -328,19 +274,22 @@ function App() {
   const handleHistorySelect = (record: any) => {
     setResult({
       id: record.id,
-      preview: record.preview_data,
+      preview: record.preview_data || [],
       total_items: record.results.length,
       selectors_used: ['h1', 'h2', '.title'],
-      status: 'completed'
+      status: 'completed',
+      raw_data: record.results
     });
-    setUrls([{ id: '1', url: record.target_url }]);
+    setUrls(record.target_urls.map((url: string, index: number) => ({ 
+      id: (index + 1).toString(), 
+      url 
+    })));
     setQuery(record.user_query);
     setIsHistoryOpen(false);
   };
 
   const handleHistoryRemove = (id: string) => {
-    const updatedHistory = removeFromHistory(id);
-    setHistory(updatedHistory);
+    deleteScrape(id);
   };
 
   const handleReset = () => {
@@ -351,6 +300,15 @@ function App() {
   };
 
   const validUrlCount = urls.filter(entry => entry.url.trim() !== '').length;
+  
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 flex items-center justify-center">
+        <LoadingSpinner message="Loading..." />
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 p-4">
       <div className="container mx-auto max-w-6xl">
@@ -358,14 +316,30 @@ function App() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
+          className="flex items-center justify-between mb-8"
         >
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
-            Data<span className="text-blue-300">Glass</span>
-          </h1>
-          <p className="text-white/70 text-lg">
-            Intelligent web scraping powered by AI
-          </p>
+          <div className="text-center flex-1">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
+              Data<span className="text-blue-300">Glass</span>
+            </h1>
+            <p className="text-white/70 text-lg">
+              Intelligent web scraping powered by AI
+            </p>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {user ? (
+              <UserMenu />
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In</span>
+              </button>
+            )}
+          </div>
         </motion.div>
 
         {/* Main Interface */}
@@ -454,9 +428,12 @@ function App() {
                 <button
                   onClick={() => setIsHistoryOpen(true)}
                   className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+                  disabled={!user}
+                  title={!user ? "Sign in to view history" : "View scrape history"}
                 >
                   <History className="w-5 h-5" />
                   <span>History</span>
+                  {!user && <span className="text-xs opacity-60">(Sign in required)</span>}
                 </button>
 
                 {result && (
@@ -571,9 +548,15 @@ function App() {
       <HistoryPanel
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
-        history={history}
+        history={scrapes}
         onSelectHistory={handleHistorySelect}
         onRemoveHistory={handleHistoryRemove}
+      />
+      
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
     </div>
   );

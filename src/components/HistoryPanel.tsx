@@ -1,17 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, ExternalLink, X, Trash2 } from 'lucide-react';
+import { ScrapeRecord } from '../lib/supabase';
 
-interface ScrapeRecord {
-  id: string;
-  created_at: string;
-  target_url: string;
-  user_query: string;
-  results: any[];
-  preview_data: any[];
-  status: string;
-  error_message?: string;
-}
 
 interface HistoryPanelProps {
   isOpen: boolean;
@@ -86,9 +77,9 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                           <div className="flex items-center space-x-2 mb-2">
                             <ExternalLink className="w-4 h-4 text-white/40 flex-shrink-0" />
                             <p className="text-white/80 text-sm font-medium truncate">
-                              {record.target_url.includes('URLs') 
-                                ? record.target_url 
-                                : new URL(record.target_url).hostname}
+                              {record.target_urls.length > 1 
+                                ? `${record.target_urls.length} URLs` 
+                                : record.target_urls[0] ? new URL(record.target_urls[0]).hostname : 'Unknown URL'}
                             </p>
                           </div>
                           <p className="text-white/60 text-sm mb-2 line-clamp-2">
