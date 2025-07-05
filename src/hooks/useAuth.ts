@@ -28,9 +28,9 @@ export const useAuth = () => {
         }
       } catch (error) {
         console.error('Error getting initial session:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     getInitialSession();
