@@ -1,586 +1,752 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  Search, 
-  Download, 
-  FileText, 
-  History,
-  RefreshCw,
-  ExternalLink,
-  LogIn,
-  Plus,
-  Trash2
-} from 'lucide-react';
-import { useAuth } from './hooks/useAuth';
-import { useScrapes } from './hooks/useScrapes';
-import { DataTable } from './components/DataTable';
-import { GlassCard } from './components/GlassCard';
-import { JsonViewer } from './components/JsonViewer';
-import { LoadingSpinner } from './components/LoadingSpinner';
-import { HistoryPanel } from './components/HistoryPanel';
-import { AuthModal } from './components/AuthModal';
-import { UserMenu } from './components/UserMenu';
-import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
-import { ScrapeRecord } from './lib/supabase';
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
-
-// Mock data for demonstration
-const mockData = [
-  { title: "Breaking: Tech Giants Report Record Earnings", url: "https://example.com/news1", category: "Technology", date: "2024-01-15" },
-  { title: "Climate Summit Reaches Historic Agreement", url: "https://example.com/news2", category: "Environment", date: "2024-01-14" },
-  { title: "New AI Breakthrough in Medical Research", url: "https://example.com/news3", category: "Science", date: "2024-01-13" },
-  { title: "Global Markets Show Strong Recovery", url: "https://example.com/news4", category: "Finance", date: "2024-01-12" },
-  { title: "Space Mission Discovers New Exoplanet", url: "https://example.com/news5", category: "Space", date: "2024-01-11" }
-];
-
-
-type ViewMode = 'table' | 'json';
-
-interface UrlEntry {
-  id: string;
-  url: string;
+interface ExecuteScrapeRequest {
+  urls: string[];
+  firecrawlConfig: any;
+  extractionSchema: any;
+  userQuery: string;
 }
 
-function App() {
-  const { user, loading: authLoading } = useAuth();
-  const { scrapes, createScrape, deleteScrape } = useScrapes();
+interface ScrapeResult {
+  url: string;
+  data: any;
+  success: boolean;
+  error?: string;
+}
+
+interface ExecuteScrapeResponse {
+  results: ScrapeResult[];
+  summary: {
+    total_urls: number;
+    successful_scrapes: number;
+    failed_scrapes: number;
+    total_items_extracted: number;
+  };
+  error?: string;
+  debug?: any;
+}
+
+// Helper function to detect if user wants specific data types
+const detectSpecificDataRequest = (userQuery: string): string | null => {
+  const query = userQuery.toLowerCase();
   
-  const [urls, setUrls] = useState<UrlEntry[]>([{ id: '1', url: '' }]);
-  const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-
-  const addUrl = () => {
-    const newId = Date.now().toString();
-    setUrls([...urls, { id: newId, url: '' }]);
-  };
-
-  const removeUrl = (id: string) => {
-    if (urls.length > 1) {
-      setUrls(urls.filter(entry => entry.id !== id));
-    }
-  };
-
-  const updateUrl = (id: string, newUrl: string) => {
-    setUrls(urls.map(entry => 
-      entry.id === id ? { ...entry, url: newUrl } : entry
-    ));
-  };
-
-  const parseCommaUrls = (inputValue: string, entryId: string) => {
-    // Check if the input contains commas
-    if (inputValue.includes(',')) {
-      const urlList = inputValue
-        .split(',')
-        .map(url => url.trim())
-        .filter(url => url.length > 0);
-      
-      if (urlList.length > 1) {
-        // Find the index of the current entry
-        const currentIndex = urls.findIndex(entry => entry.id === entryId);
-        
-        // Create new URL entries
-        const newUrls = urlList.map((url, index) => ({
-          id: index === 0 ? entryId : `${Date.now()}-${index}`,
-          url: url
-        }));
-        
-        // Replace the current entry and add new ones
-        const updatedUrls = [
-          ...urls.slice(0, currentIndex),
-          ...newUrls,
-          ...urls.slice(currentIndex + 1)
-        ];
-        
-        setUrls(updatedUrls);
-        return true; // Indicates that parsing occurred
-      }
-    }
-    return false; // No parsing needed
-  };
-
-  const handleUrlChange = (id: string, newUrl: string) => {
-    // First try to parse comma-separated URLs
-    const wasParsed = parseCommaUrls(newUrl, id);
-    
-    // If not parsed, update normally
-    if (!wasParsed) {
-      updateUrl(id, newUrl);
-    }
-  };
-
-  const handleScrape = async () => {
-    const validUrls = urls.filter(entry => entry.url.trim() !== '');
-    if (validUrls.length === 0 || !query) return;
-
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      // Step 1: Convert natural language query to Firecrawl configuration
-      console.log('Starting query conversion...', { query, validUrls });
-      
-      const convertResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/convert-query`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userQuery: query,
-          urls: validUrls.map(entry => entry.url)
-        }),
-      });
-
-      console.log('Convert response status:', convertResponse.status);
-      
-      if (!convertResponse.ok) {
-        const errorData = await convertResponse.json();
-        console.error('Convert query error:', errorData);
-        throw new Error(`Failed to convert query: ${errorData.error || 'Unknown error'}`);
-      }
-
-      const { firecrawlConfig, extractionSchema } = await convertResponse.json();
-      console.log('Conversion successful:', { firecrawlConfig, extractionSchema });
-
-      // Step 2: Execute the scraping with Firecrawl
-      console.log('Starting scrape execution...');
-      
-      const scrapeResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/execute-scrape`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          urls: validUrls.map(entry => entry.url),
-          firecrawlConfig,
-          extractionSchema,
-          userQuery: query
-        }),
-      });
-
-      console.log('Scrape response status:', scrapeResponse.status);
-      
-      if (!scrapeResponse.ok) {
-        const errorData = await scrapeResponse.json();
-        console.error('Scrape execution error:', errorData);
-        throw new Error(`Failed to execute scraping: ${errorData.error || 'Unknown error'}`);
-      }
-
-      const scrapeData = await scrapeResponse.json();
-      console.log('Scraping successful:', scrapeData);
-
-      // Process results for display
-      const allExtractedData = [];
-      const successfulResults = scrapeData.results.filter(r => r.success);
-      
-      successfulResults.forEach(result => {
-        if (result.data?.extract && Array.isArray(result.data.extract)) {
-          // Handle structured extraction
-          allExtractedData.push(...result.data.extract);
-        } else if (result.data?.raw?.markdown || result.data?.raw?.html) {
-          // Handle fallback content
-          const content = result.data.raw.markdown || result.data.raw.html;
-          const lines = content.split('\n').filter(line => line.trim() && line.length > 10);
-          
-          lines.slice(0, 20).forEach((line, index) => {
-            allExtractedData.push({
-              content: line.trim(),
-              url: result.url,
-              title: result.data.metadata?.title || `Item ${index + 1}`,
-              source: 'raw_content',
-              index: index + 1
-            });
-          });
-        }
-      });
-
-      console.log('All extracted data:', allExtractedData);
-      console.log('Total items found:', allExtractedData.length);
-
-      setResult({
-        id: `scrape-${Date.now()}`,
-        preview: allExtractedData.slice(0, 10),
-        total_items: scrapeData.summary.total_items_extracted,
-        status: 'completed',
-        urls_processed: scrapeData.summary.successful_scrapes,
-        failed_urls: scrapeData.summary.failed_scrapes,
-        raw_data: allExtractedData,
-        extraction_method: scrapeData.results[0]?.data?.metadata?.extractionMethod || 'unknown',
-        used_chatgpt: scrapeData.results.some(r => r.data?.metadata?.usedChatGPT) || false,
-        specific_data_type: scrapeData.results[0]?.data?.metadata?.specificDataType || null
-      });
-
-      // Add successful scrape to history
-      if (allExtractedData.length > 0) {
-        // Save to database if user is logged in
-        if (user) {
-          await createScrape(
-            validUrls.map(entry => entry.url),
-            query,
-            allExtractedData,
-            allExtractedData.slice(0, 3)
-          );
-        }
-      }
-
-    } catch (error) {
-      console.error('Scraping error:', error);
-      setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDownloadJSON = () => {
-    const dataToDownload = result?.raw_data || mockData;
-    const jsonBlob = new Blob([JSON.stringify(dataToDownload, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(jsonBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'scrape_data.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadCSV = () => {
-    try {
-      const dataToExport = result?.raw_data || mockData;
-      downloadCSV(dataToExport, 'scrape_results.csv');
-    } catch (error) {
-      console.error('CSV generation error:', error);
-      setError('Failed to generate CSV. Please try again.');
-    }
-  };
-
-  const handleDownloadMarkdown = () => {
-    try {
-      const dataToExport = result?.raw_data || mockData;
-      downloadMarkdown(dataToExport, 'scrape_results.md');
-    } catch (error) {
-      console.error('Markdown download error:', error);
-      setError('Failed to download markdown. Please try again.');
-    }
-  };
-
-  const handleHistorySelect = (record: any) => {
-    setResult({
-      id: record.id,
-      preview: record.preview_data || [],
-      total_items: record.results.length,
-      status: 'completed',
-      raw_data: record.results,
-      extraction_method: 'database',
-      used_chatgpt: false,
-      specific_data_type: null
-    });
-    setUrls(record.target_urls.map((url: string, index: number) => ({ 
-      id: (index + 1).toString(), 
-      url 
-    })));
-    setQuery(record.user_query);
-    setIsHistoryOpen(false);
-  };
-
-  const handleHistoryRemove = (id: string) => {
-    deleteScrape(id);
-  };
-
-  const handleReset = () => {
-    setUrls([{ id: '1', url: '' }]);
-    setQuery('');
-    setResult(null);
-    setError(null);
-  };
-
-  const validUrlCount = urls.filter(entry => entry.url.trim() !== '').length;
-  
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <LoadingSpinner message="Loading..." />
-      </div>
-    );
+  // Email patterns
+  if (query.includes('email') || query.includes('e-mail') || query.includes('contact')) {
+    return 'emails';
   }
   
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 p-4">
-      <div className="container mx-auto max-w-6xl">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-8"
-        >
-          <div className="text-center flex-1">
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
-              Data<span className="text-blue-300">Glass</span>
-            </h1>
-            <p className="text-white/70 text-lg">
-              Intelligent web scraping powered by AI
-            </p>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {user ? (
-              <UserMenu />
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Sign In</span>
-              </button>
-            )}
-          </div>
-        </motion.div>
+  // Phone patterns
+  if (query.includes('phone') || query.includes('telephone') || query.includes('mobile') || query.includes('cell')) {
+    return 'phone_numbers';
+  }
+  
+  // Address patterns
+  if (query.includes('address') || query.includes('location') || query.includes('street')) {
+    return 'addresses';
+  }
+  
+  // Price patterns
+  if (query.includes('price') || query.includes('cost') || query.includes('fee') || query.includes('$')) {
+    return 'prices';
+  }
+  
+  // Name patterns
+  if (query.includes('name') || query.includes('person') || query.includes('people')) {
+    return 'names';
+  }
+  
+  // Date patterns
+  if (query.includes('date') || query.includes('time') || query.includes('when')) {
+    return 'dates';
+  }
+  
+  // URL/Link patterns
+  if (query.includes('link') || query.includes('url') || query.includes('website')) {
+    return 'links';
+  }
+  
+  return null; // No specific data type detected
+};
 
-        {/* Main Interface */}
-        <div className="space-y-6">
-          {/* Input Section */}
-          <GlassCard className="p-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-white/80 text-sm font-medium mb-2">
-                  Target URLs ({validUrlCount} {validUrlCount === 1 ? 'URL' : 'URLs'})
-                </label>
-                <p className="text-white/60 text-xs mb-3">
-                  💡 Tip: You can paste multiple URLs separated by commas to automatically expand them
-                </p>
-                <div className="space-y-3">
-                  {urls.map((urlEntry, index) => (
-                    <motion.div
-                      key={urlEntry.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center space-x-3"
-                    >
-                      <div className="relative flex-1">
-                        <ExternalLink className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40 w-5 h-5" />
-                        <input
-                          type="url"
-                          value={urlEntry.url}
-                          onChange={(e) => handleUrlChange(urlEntry.id, e.target.value)}
-                          placeholder={index === 0 ? "https://example.com, https://site2.com, ..." : `https://example${index + 1}.com`}
-                          className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 transition-all"
-                        />
-                      </div>
-                      
-                      {urls.length > 1 && (
-                        <button
-                          onClick={() => removeUrl(urlEntry.id)}
-                          className="p-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors"
-                          title="Remove URL"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      )}
-                    </motion.div>
-                  ))}
-                  
-                  <button
-                    onClick={addUrl}
-                    className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white/80 rounded-lg transition-colors text-sm border border-white/20 border-dashed"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add another URL</span>
-                  </button>
-                </div>
-              </div>
+// Function to use ChatGPT for specific data extraction
+const extractSpecificDataWithChatGPT = async (content: string, userQuery: string, dataType: string, openaiApiKey: string): Promise<any[]> => {
+  console.log(`\n=== CHATGPT SPECIFIC DATA EXTRACTION ===`);
+  console.log(`Data type: ${dataType}`);
+  console.log(`User query: ${userQuery}`);
+  console.log(`Content length: ${content.length} characters`);
 
-              <div>
-                <label className="block text-white/80 text-sm font-medium mb-2">
-                  What do you want to extract?
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40 w-5 h-5" />
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="e.g., 'all headlines', 'product prices', 'contact information'"
-                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 transition-all"
-                  />
-                </div>
-              </div>
+  const systemPrompt = `You are a precise data extraction specialist. Your job is to analyze webpage content and extract ONLY the specific type of data requested by the user.
 
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={handleScrape}
-                  disabled={validUrlCount === 0 || !query || isLoading}
-                  className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
-                >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Search className="w-5 h-5" />
-                  )}
-                  <span>Extract Data{validUrlCount > 1 ? ` from ${validUrlCount} URLs` : ''}</span>
-                </button>
+CRITICAL INSTRUCTIONS:
+1. Extract ONLY the specific data type requested - nothing else
+2. Return results as a JSON array of objects
+3. Each object should have relevant properties for the data type
+4. If no data of the requested type is found, return an empty array
+5. Be extremely precise - don't include similar but different data types
+6. Include context or source information when helpful
 
-                <button
-                  onClick={() => setIsHistoryOpen(true)}
-                  className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-                  disabled={!user}
-                  title={!user ? "Sign in to view history" : "View scrape history"}
-                >
-                  <History className="w-5 h-5" />
-                  <span>History</span>
-                  {!user && <span className="text-xs opacity-60">(Sign in required)</span>}
-                </button>
+DATA TYPE EXTRACTION RULES:
 
-                {result && (
-                  <button
-                    onClick={handleReset}
-                    className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                    <span>New Scrape</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </GlassCard>
+For EMAILS:
+- Extract only valid email addresses
+- Format: [{"email": "example@domain.com", "context": "surrounding text"}]
 
-          {/* Loading State */}
-          {isLoading && (
-            <GlassCard className="p-8">
-              <LoadingSpinner />
-            </GlassCard>
-          )}
+For PHONE NUMBERS:
+- Extract phone numbers in any format
+- Format: [{"phone": "+1-555-123-4567", "formatted": "555-123-4567", "context": "surrounding text"}]
 
-          {/* Error State */}
-          {error && (
-            <GlassCard className="p-6 border-red-500/20 bg-red-500/10">
-              <div className="text-red-300 text-center">
-                <p className="font-medium mb-2">Error</p>
-                <p className="text-sm">{error}</p>
-              </div>
-            </GlassCard>
-          )}
+For ADDRESSES:
+- Extract physical addresses
+- Format: [{"address": "123 Main St, City, State", "type": "street_address", "context": "surrounding text"}]
 
-          {/* Results */}
-          {result && !isLoading && (
-            <GlassCard className="p-6">
-              <div className="space-y-6">
-                {/* Results Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-semibold text-white mb-2">
-                      Extraction Results
-                    </h3>
-                    <div className="space-y-1">
-                      <p className="text-white/60 text-sm">
-                        Found {result.total_items} items from {result.urls_processed || 1} {result.urls_processed === 1 ? 'URL' : 'URLs'}
-                      </p>
-                      {result.extraction_method && (
-                        <p className="text-white/50 text-xs">
-                          Extraction method: {result.extraction_method}
-                          {result.used_chatgpt && (
-                            <span className="ml-2 px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">
-                              AI Enhanced
-                            </span>
-                          )}
-                          {result.specific_data_type && (
-                            <span className="ml-2 px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">
-                              Specific: {result.specific_data_type}
-                            </span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+For PRICES:
+- Extract monetary amounts and prices
+- Format: [{"price": "$99.99", "currency": "USD", "item": "product name", "context": "surrounding text"}]
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleDownloadJSON}
-                      className="flex items-center space-x-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>JSON</span>
-                    </button>
-                    <button
-                      onClick={handleDownloadCSV}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm"
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>CSV</span>
-                    </button>
-                    <button
-                      onClick={handleDownloadMarkdown}
-                      className="flex items-center space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm"
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>Markdown</span>
-                    </button>
-                  </div>
-                </div>
+For NAMES:
+- Extract person names
+- Format: [{"name": "John Doe", "type": "person", "context": "surrounding text"}]
 
-                {/* View Mode Tabs */}
-                <div className="flex space-x-1 bg-white/5 rounded-lg p-1">
-                  <button
-                    onClick={() => setViewMode('table')}
-                    className={`flex-1 py-2 px-4 rounded-md transition-colors text-sm font-medium ${
-                      viewMode === 'table'
-                        ? 'bg-blue-500 text-white'
-                        : 'text-white/70 hover:text-white'
-                    }`}
-                  >
-                    Table View
-                  </button>
-                  <button
-                    onClick={() => setViewMode('json')}
-                    className={`flex-1 py-2 px-4 rounded-md transition-colors text-sm font-medium ${
-                      viewMode === 'json'
-                        ? 'bg-blue-500 text-white'
-                        : 'text-white/70 hover:text-white'
-                    }`}
-                  >
-                    JSON Source
-                  </button>
-                </div>
+For DATES:
+- Extract dates and times
+- Format: [{"date": "2024-01-15", "original": "January 15, 2024", "context": "surrounding text"}]
 
-                {/* Data Display */}
-                <div className="bg-white/5 rounded-lg p-4">
-                  {viewMode === 'table' ? (
-                    <DataTable data={result?.raw_data || mockData} />
-                  ) : (
-                    <JsonViewer data={result?.raw_data || mockData} />
-                  )}
-                </div>
-              </div>
-            </GlassCard>
-          )}
-        </div>
-      </div>
+For LINKS:
+- Extract URLs and links
+- Format: [{"url": "https://example.com", "title": "link text", "context": "surrounding text"}]
 
-      {/* History Panel */}
-      <HistoryPanel
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        history={scrapes}
-        onSelectHistory={handleHistorySelect}
-        onRemoveHistory={handleHistoryRemove}
-      />
+RESPONSE FORMAT: Return ONLY a valid JSON array, no explanations or markdown.`;
+
+  const userPrompt = `WEBPAGE CONTENT:
+${content}
+
+USER REQUEST: "${userQuery}"
+EXTRACT ONLY: ${dataType}
+
+Analyze the content above and extract ONLY ${dataType} as requested. Return a JSON array of objects with the extracted data.`;
+
+  try {
+    console.log("Making ChatGPT request for specific data extraction...");
+    
+    const chatGPTResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: userPrompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      }),
+    });
+
+    if (!chatGPTResponse.ok) {
+      const errorText = await chatGPTResponse.text();
+      console.error("ChatGPT API error:", errorText);
+      return [];
+    }
+
+    const chatGPTData = await chatGPTResponse.json();
+    const assistantMessage = chatGPTData.choices?.[0]?.message?.content;
+
+    if (!assistantMessage) {
+      console.error("No response from ChatGPT");
+      return [];
+    }
+
+    console.log("ChatGPT raw response:", assistantMessage);
+
+    // Parse the JSON response
+    let extractedData;
+    try {
+      // Clean the response
+      let cleanedResponse = assistantMessage.trim();
       
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
-    </div>
-  );
-}
+      // Remove markdown code blocks if present
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      extractedData = JSON.parse(cleanedResponse);
+      
+      if (!Array.isArray(extractedData)) {
+        console.error("ChatGPT response is not an array:", extractedData);
+        return [];
+      }
+      
+      console.log(`Successfully extracted ${extractedData.length} ${dataType} items`);
+      return extractedData;
+      
+    } catch (parseError) {
+      console.error("Failed to parse ChatGPT response:", parseError);
+      console.error("Raw response:", assistantMessage);
+      return [];
+    }
+    
+  } catch (error) {
+    console.error("Error in ChatGPT specific data extraction:", error);
+    return [];
+  }
+};
 
-export default App;
+// Helper function to extract specific data types from text using regex (fallback)
+const extractSpecificDataRegex = (text: string, dataType: string): any[] => {
+  const results = [];
+  
+  switch (dataType) {
+    case 'emails':
+      const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+      const emails = text.match(emailRegex) || [];
+      emails.forEach((email, index) => {
+        const emailIndex = text.indexOf(email);
+        const contextStart = Math.max(0, emailIndex - 50);
+        const contextEnd = Math.min(text.length, emailIndex + email.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          email: email,
+          context: context,
+          _index: index,
+          _type: 'email',
+          _extraction_method: 'regex'
+        });
+      });
+      break;
+      
+    case 'phone_numbers':
+      const phoneRegex = /(\+?1?[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
+      const phones = text.match(phoneRegex) || [];
+      phones.forEach((phone, index) => {
+        const phoneIndex = text.indexOf(phone);
+        const contextStart = Math.max(0, phoneIndex - 50);
+        const contextEnd = Math.min(text.length, phoneIndex + phone.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          phone: phone.trim(),
+          context: context,
+          _index: index,
+          _type: 'phone',
+          _extraction_method: 'regex'
+        });
+      });
+      break;
+      
+    case 'prices':
+      const priceRegex = /\$[\d,]+\.?\d*|\$\d+|[\d,]+\.?\d*\s*(dollars?|USD|usd)/g;
+      const prices = text.match(priceRegex) || [];
+      prices.forEach((price, index) => {
+        const priceIndex = text.indexOf(price);
+        const contextStart = Math.max(0, priceIndex - 50);
+        const contextEnd = Math.min(text.length, priceIndex + price.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          price: price.trim(),
+          context: context,
+          _index: index,
+          _type: 'price',
+          _extraction_method: 'regex'
+        });
+      });
+      break;
+      
+    case 'links':
+      const urlRegex = /https?:\/\/[^\s)]+/g;
+      const urls = text.match(urlRegex) || [];
+      urls.forEach((url, index) => {
+        const urlIndex = text.indexOf(url);
+        const contextStart = Math.max(0, urlIndex - 50);
+        const contextEnd = Math.min(text.length, urlIndex + url.length + 50);
+        const context = text.substring(contextStart, contextEnd).trim();
+        
+        results.push({
+          url: url.trim(),
+          context: context,
+          _index: index,
+          _type: 'url',
+          _extraction_method: 'regex'
+        });
+      });
+      break;
+      
+    default:
+      // For other data types, return empty array
+      break;
+  }
+  
+  return results;
+};
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders,
+    });
+  }
+
+  try {
+    const requestBody = await req.json();
+    console.log("=== EXECUTE SCRAPE DEBUG START ===");
+    console.log("Received request:", JSON.stringify(requestBody, null, 2));
+
+    const { urls, firecrawlConfig, extractionSchema, userQuery }: ExecuteScrapeRequest = requestBody;
+
+    if (!urls || urls.length === 0) {
+      console.error("No URLs provided");
+      return new Response(
+        JSON.stringify({ 
+          error: "No URLs provided",
+          debug: { urls: urls?.length || 0 }
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY");
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    
+    console.log("API keys check:", {
+      hasFirecrawl: !!firecrawlApiKey,
+      hasOpenAI: !!openaiApiKey,
+      firecrawlPrefix: firecrawlApiKey?.substring(0, 10) + "..." || "NOT_FOUND"
+    });
+
+    if (!firecrawlApiKey) {
+      console.error("Firecrawl API key not found in environment");
+      return new Response(
+        JSON.stringify({ 
+          error: "Firecrawl API key not configured. Please add FIRECRAWL_API_KEY to your environment variables."
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!openaiApiKey) {
+      console.error("OpenAI API key not found in environment");
+      return new Response(
+        JSON.stringify({ 
+          error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables."
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Detect if user wants specific data extraction
+    const specificDataType = detectSpecificDataRequest(userQuery);
+    console.log("Specific data type detected:", specificDataType);
+
+    const results: ScrapeResult[] = [];
+    let totalItemsExtracted = 0;
+
+    console.log("Processing URLs:", urls);
+    console.log("Firecrawl config:", JSON.stringify(firecrawlConfig, null, 2));
+    console.log("Extraction schema:", JSON.stringify(extractionSchema, null, 2));
+    console.log("User query:", userQuery);
+
+    // Process each URL
+    for (const url of urls) {
+      console.log(`\n--- Processing URL: ${url} ---`);
+      
+      try {
+        // Prepare Firecrawl request according to v1 API specification
+        const firecrawlPayload: any = {
+          url: url,
+          formats: firecrawlConfig.formats || ["markdown"],
+          onlyMainContent: firecrawlConfig.onlyMainContent !== false,
+          waitFor: 3000, // Wait 3 seconds for dynamic content
+        };
+
+        // Add extract configuration if using extract format
+        if (firecrawlConfig.formats && firecrawlConfig.formats.includes("extract")) {
+          if (firecrawlConfig.extract && firecrawlConfig.extract.schema) {
+            firecrawlPayload.extract = firecrawlConfig.extract;
+            console.log("Using extract configuration:", JSON.stringify(firecrawlPayload.extract, null, 2));
+          } else {
+            console.error("Extract format specified but no extract.schema provided");
+            // Fallback to markdown if extract is malformed
+            firecrawlPayload.formats = ["markdown"];
+            delete firecrawlPayload.extract;
+          }
+        }
+
+        // Add optional configuration for non-extract formats
+        if (!firecrawlPayload.formats.includes("extract")) {
+          if (firecrawlConfig.includeTags && firecrawlConfig.includeTags.length > 0) {
+            firecrawlPayload.includeTags = firecrawlConfig.includeTags;
+            console.log("Including tags:", firecrawlConfig.includeTags);
+          }
+          
+          if (firecrawlConfig.excludeTags && firecrawlConfig.excludeTags.length > 0) {
+            firecrawlPayload.excludeTags = firecrawlConfig.excludeTags;
+            console.log("Excluding tags:", firecrawlConfig.excludeTags);
+          }
+        }
+
+        console.log("Final Firecrawl payload:", JSON.stringify(firecrawlPayload, null, 2));
+
+        // Make request to Firecrawl
+        console.log("Making request to Firecrawl API...");
+        const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${firecrawlApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(firecrawlPayload),
+        });
+
+        console.log("Firecrawl response status:", firecrawlResponse.status);
+
+        if (!firecrawlResponse.ok) {
+          const errorText = await firecrawlResponse.text();
+          console.error("Firecrawl API error:", {
+            status: firecrawlResponse.status,
+            statusText: firecrawlResponse.statusText,
+            error: errorText
+          });
+          
+          results.push({
+            url: url,
+            data: null,
+            success: false,
+            error: `Firecrawl API error (${firecrawlResponse.status}): ${errorText}`
+          });
+          continue;
+        }
+
+        const firecrawlData = await firecrawlResponse.json();
+        console.log("Firecrawl response data keys:", Object.keys(firecrawlData.data || {}));
+        console.log("Firecrawl success:", firecrawlData.success);
+        
+        // Get the raw content for processing
+        let rawContent = "";
+        if (firecrawlData.data?.markdown) {
+          rawContent = firecrawlData.data.markdown;
+        } else if (firecrawlData.data?.html) {
+          rawContent = firecrawlData.data.html;
+        } else if (firecrawlData.data?.extract) {
+          // If we have extracted data, convert it to text for further processing
+          rawContent = JSON.stringify(firecrawlData.data.extract, null, 2);
+        }
+
+        console.log("Raw content length:", rawContent.length);
+
+        let processedData = [];
+        let extractionMethod = "general";
+
+        // Step 1: Check if we have structured extraction results
+        if (firecrawlData.data?.extract) {
+          console.log("Found extracted data from Firecrawl:", JSON.stringify(firecrawlData.data.extract, null, 2));
+          
+          // If user wants specific data and we have content, use ChatGPT for precision
+          if (specificDataType && rawContent.length > 0) {
+            console.log("Using ChatGPT for specific data extraction...");
+            const chatGPTResults = await extractSpecificDataWithChatGPT(rawContent, userQuery, specificDataType, openaiApiKey);
+            
+            if (chatGPTResults.length > 0) {
+              processedData = chatGPTResults.map((item, index) => ({
+                ...item,
+                _index: index,
+                _source: 'chatgpt_specific',
+                _url: url,
+                _extraction_method: 'chatgpt'
+              }));
+              extractionMethod = "chatgpt_specific";
+              totalItemsExtracted += chatGPTResults.length;
+            } else {
+              // Fallback to regex extraction
+              console.log("ChatGPT returned no results, trying regex fallback...");
+              const regexResults = extractSpecificDataRegex(rawContent, specificDataType);
+              processedData = regexResults.map((item, index) => ({
+                ...item,
+                _url: url
+              }));
+              extractionMethod = "regex_fallback";
+              totalItemsExtracted += regexResults.length;
+            }
+          } else {
+            // Process Firecrawl extracted data normally
+            const extractedData = firecrawlData.data.extract;
+            if (Array.isArray(extractedData)) {
+              processedData = extractedData.map((item, index) => ({
+                ...item,
+                _index: index,
+                _source: 'firecrawl_extract',
+                _url: url
+              }));
+              totalItemsExtracted += extractedData.length;
+            } else if (typeof extractedData === 'object' && extractedData !== null) {
+              Object.entries(extractedData).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                  const items = value.map((item, index) => ({
+                    ...item,
+                    _index: index,
+                    _source: key,
+                    _url: url,
+                    _category: key
+                  }));
+                  processedData.push(...items);
+                  totalItemsExtracted += value.length;
+                } else if (value && typeof value === 'object') {
+                  processedData.push({ 
+                    ...value, 
+                    _source: key,
+                    _url: url,
+                    _category: key
+                  });
+                  totalItemsExtracted += 1;
+                } else if (value !== null && value !== undefined) {
+                  processedData.push({ 
+                    [key]: value, 
+                    _source: 'firecrawl_extract',
+                    _url: url,
+                    _category: key
+                  });
+                  totalItemsExtracted += 1;
+                }
+              });
+            }
+            extractionMethod = "firecrawl_extract";
+          }
+        } 
+        // Step 2: Process markdown/html content
+        else if (rawContent.length > 0) {
+          console.log("Processing raw content...");
+          
+          // If user wants specific data, use ChatGPT for precision
+          if (specificDataType) {
+            console.log("Using ChatGPT for specific data extraction from raw content...");
+            const chatGPTResults = await extractSpecificDataWithChatGPT(rawContent, userQuery, specificDataType, openaiApiKey);
+            
+            if (chatGPTResults.length > 0) {
+              processedData = chatGPTResults.map((item, index) => ({
+                ...item,
+                _index: index,
+                _source: 'chatgpt_specific',
+                _url: url,
+                _extraction_method: 'chatgpt'
+              }));
+              extractionMethod = "chatgpt_specific";
+              totalItemsExtracted += chatGPTResults.length;
+            } else {
+              // Fallback to regex extraction
+              console.log("ChatGPT returned no results, trying regex fallback...");
+              const regexResults = extractSpecificDataRegex(rawContent, specificDataType);
+              processedData = regexResults.map((item, index) => ({
+                ...item,
+                _url: url
+              }));
+              extractionMethod = "regex_fallback";
+              totalItemsExtracted += regexResults.length;
+            }
+          } else {
+            // General content processing for markdown
+            if (firecrawlData.data.markdown) {
+              const lines = rawContent.split('\n').filter(line => line.trim());
+              const extractedItems = [];
+              
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Extract headings
+                if (line.startsWith('#')) {
+                  const level = (line.match(/^#+/) || [''])[0].length;
+                  const title = line.replace(/^#+\s*/, '');
+                  if (title.length > 0) {
+                    extractedItems.push({
+                      type: 'heading',
+                      title: title,
+                      level: level,
+                      url: url,
+                      _index: extractedItems.length,
+                      _source: 'markdown_parsing'
+                    });
+                  }
+                }
+                // Extract markdown links
+                else if (line.includes('[') && line.includes('](')) {
+                  const linkMatches = line.match(/\[([^\]]*)\]\(([^)]+)\)/g);
+                  if (linkMatches) {
+                    linkMatches.forEach(match => {
+                      const linkMatch = match.match(/\[([^\]]*)\]\(([^)]+)\)/);
+                      if (linkMatch) {
+                        extractedItems.push({
+                          type: 'link',
+                          title: linkMatch[1] || 'Link',
+                          url: linkMatch[2],
+                          source_url: url,
+                          _index: extractedItems.length,
+                          _source: 'markdown_parsing'
+                        });
+                      }
+                    });
+                  }
+                }
+                // Extract meaningful text content
+                else if (line.length > 20 && !line.startsWith('*') && !line.startsWith('-')) {
+                  extractedItems.push({
+                    type: 'text',
+                    content: line,
+                    source_url: url,
+                    _index: extractedItems.length,
+                    _source: 'markdown_parsing'
+                  });
+                }
+              }
+              
+              processedData = extractedItems;
+              totalItemsExtracted += extractedItems.length;
+              extractionMethod = "markdown_parsing";
+            } else {
+              // Fallback for HTML content
+              processedData = [{
+                type: 'raw_content',
+                content: rawContent.substring(0, 1000), // Limit content length
+                url: url,
+                title: firecrawlData.data.metadata?.title,
+                description: firecrawlData.data.metadata?.description,
+                _index: 0,
+                _source: 'html_fallback'
+              }];
+              totalItemsExtracted += 1;
+              extractionMethod = "html_fallback";
+            }
+          }
+        } else {
+          console.log("No usable data found in Firecrawl response");
+          processedData = [];
+        }
+
+        console.log("Processed data sample:", JSON.stringify(processedData.slice(0, 3), null, 2));
+        console.log("Items extracted from this URL:", processedData.length);
+        console.log("Extraction method used:", extractionMethod);
+
+        results.push({
+          url: url,
+          data: {
+            extract: processedData,
+            metadata: {
+              title: firecrawlData.data?.metadata?.title,
+              description: firecrawlData.data?.metadata?.description,
+              sourceURL: url,
+              scrapedAt: new Date().toISOString(),
+              userQuery: userQuery,
+              itemCount: processedData.length,
+              format: firecrawlPayload.formats[0],
+              extractionMethod: extractionMethod,
+              specificDataType: specificDataType,
+              usedChatGPT: extractionMethod.includes('chatgpt')
+            },
+            raw: {
+              markdown: firecrawlData.data?.markdown?.substring(0, 2000), // Limit raw data size
+              html: firecrawlData.data?.html?.substring(0, 2000)
+            }
+          },
+          success: true
+        });
+
+      } catch (error) {
+        console.error(`Error scraping ${url}:`, error);
+        console.error("Error details:", {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        
+        results.push({
+          url: url,
+          data: null,
+          success: false,
+          error: `Scraping error: ${error.message}`
+        });
+      }
+    }
+
+    const successfulScrapes = results.filter(r => r.success).length;
+    const failedScrapes = results.filter(r => !r.success).length;
+
+    console.log("=== SCRAPING SUMMARY ===");
+    console.log("Total URLs processed:", urls.length);
+    console.log("Successful scrapes:", successfulScrapes);
+    console.log("Failed scrapes:", failedScrapes);
+    console.log("Total items extracted:", totalItemsExtracted);
+    console.log("Specific data type requested:", specificDataType);
+    console.log("Results summary:", results.map(r => ({
+      url: r.url,
+      success: r.success,
+      itemCount: r.success ? r.data?.extract?.length || 0 : 0,
+      extractionMethod: r.success ? r.data?.metadata?.extractionMethod : 'failed',
+      usedChatGPT: r.success ? r.data?.metadata?.usedChatGPT : false,
+      error: r.error
+    })));
+    console.log("=== EXECUTE SCRAPE DEBUG END ===");
+
+    const response: ExecuteScrapeResponse = {
+      results: results,
+      summary: {
+        total_urls: urls.length,
+        successful_scrapes: successfulScrapes,
+        failed_scrapes: failedScrapes,
+        total_items_extracted: totalItemsExtracted
+      }
+    };
+
+    return new Response(
+      JSON.stringify(response),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+
+  } catch (error) {
+    console.error("Error in execute-scrape function:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    return new Response(
+      JSON.stringify({ 
+        error: "Internal server error",
+        debug: { 
+          message: error.message,
+          stack: error.stack
+        }
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});
