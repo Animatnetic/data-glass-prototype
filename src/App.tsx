@@ -401,7 +401,7 @@ function App() {
                   ) : (
                     <Database className="w-5 h-5" />
                   )}
-                  <span>Extract Data{validUrlCount > 1 ? ` from ${validUrlCount} URLs` : ''}</span>
+                  <span>Submit{validUrlCount > 1 ? ` from ${validUrlCount} URLs` : ''}</span>
                 </button>
 
                 <button
