@@ -31,8 +31,8 @@ DataGlass is a modern, serverless web scraping application built with React and 
    - Run the SQL migration in `supabase/migrations/create_scrapes_table.sql`
    - Deploy the Edge Functions:
      ```bash
-     supabase functions deploy scrape
-     supabase functions deploy generate-pdf
+     supabase functions deploy convert-query
+     supabase functions deploy execute-scrape
      ```
 
 4. Configure environment variables:
