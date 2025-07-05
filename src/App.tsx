@@ -20,6 +20,51 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
 import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
 
+// History management utilities
+const HISTORY_STORAGE_KEY = 'dataglass_scrape_history';
+
+interface ScrapeRecord {
+  id: string;
+  created_at: string;
+  target_url: string;
+  user_query: string;
+  results: any[];
+  preview_data: any[];
+  status: string;
+  error_message?: string;
+}
+
+const loadHistoryFromStorage = (): ScrapeRecord[] => {
+  try {
+    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error loading history from localStorage:', error);
+    return [];
+  }
+};
+
+const saveHistoryToStorage = (history: ScrapeRecord[]): void => {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('Error saving history to localStorage:', error);
+  }
+};
+
+const addToHistory = (record: ScrapeRecord): void => {
+  const history = loadHistoryFromStorage();
+  const updatedHistory = [record, ...history].slice(0, 50); // Keep only last 50 records
+  saveHistoryToStorage(updatedHistory);
+};
+
+const removeFromHistory = (id: string): ScrapeRecord[] => {
+  const history = loadHistoryFromStorage();
+  const updatedHistory = history.filter(record => record.id !== id);
+  saveHistoryToStorage(updatedHistory);
+  return updatedHistory;
+};
+
 // Mock data for demonstration
 const mockData = [
   { title: "Breaking: Tech Giants Report Record Earnings", url: "https://example.com/news1", category: "Technology", date: "2024-01-15" },
@@ -46,6 +91,19 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<ScrapeRecord[]>([]);
+
+  // Load history on component mount
+  React.useEffect(() => {
+    setHistory(loadHistoryFromStorage());
+  }, []);
+
+  // Clear history on session close (when component unmounts)
+  React.useEffect(() => {
+    return () => {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+    };
+  }, []);
 
   const addUrl = () => {
     const newId = Date.now().toString();
@@ -211,6 +269,22 @@ function App() {
         raw_data: allExtractedData
       });
 
+      // Add successful scrape to history
+      if (allExtractedData.length > 0) {
+        const historyRecord: ScrapeRecord = {
+          id: `scrape-${Date.now()}`,
+          created_at: new Date().toISOString(),
+          target_url: validUrls.length === 1 ? validUrls[0].url : `${validUrls.length} URLs`,
+          user_query: query,
+          results: allExtractedData,
+          preview_data: allExtractedData.slice(0, 3),
+          status: 'completed'
+        };
+        
+        addToHistory(historyRecord);
+        setHistory(loadHistoryFromStorage());
+      }
+
     } catch (error) {
       console.error('Scraping error:', error);
       setError(error.message || 'An error occurred during scraping. Check the console for details.');
@@ -265,6 +339,11 @@ function App() {
     setUrls([{ id: '1', url: record.target_url }]);
     setQuery(record.user_query);
     setIsHistoryOpen(false);
+  };
+
+  const handleHistoryRemove = (id: string) => {
+    const updatedHistory = removeFromHistory(id);
+    setHistory(updatedHistory);
   };
 
   const handleReset = () => {
@@ -495,8 +574,9 @@ function App() {
       <HistoryPanel
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
-        history={mockHistory}
+        history={history}
         onSelectHistory={handleHistorySelect}
+        onRemoveHistory={handleHistoryRemove}
       />
     </div>
   );

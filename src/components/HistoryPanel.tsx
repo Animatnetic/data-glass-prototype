@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, ExternalLink, X } from 'lucide-react';
+import { Clock, ExternalLink, X, Trash2 } from 'lucide-react';
 
 interface ScrapeRecord {
   id: string;
@@ -18,13 +18,15 @@ interface HistoryPanelProps {
   onClose: () => void;
   history: ScrapeRecord[];
   onSelectHistory: (record: ScrapeRecord) => void;
+  onRemoveHistory: (id: string) => void;
 }
 
 export const HistoryPanel: React.FC<HistoryPanelProps> = ({
   isOpen,
   onClose,
   history,
-  onSelectHistory
+  onSelectHistory,
+  onRemoveHistory
 }) => {
   return (
     <AnimatePresence>
@@ -74,15 +76,19 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                       key={record.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors cursor-pointer"
-                      onClick={() => onSelectHistory(record)}
+                      className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div 
+                          className="flex-1 cursor-pointer"
+                          onClick={() => onSelectHistory(record)}
+                        >
                           <div className="flex items-center space-x-2 mb-2">
                             <ExternalLink className="w-4 h-4 text-white/40 flex-shrink-0" />
                             <p className="text-white/80 text-sm font-medium truncate">
-                              {new URL(record.target_url).hostname}
+                              {record.target_url.includes('URLs') 
+                                ? record.target_url 
+                                : new URL(record.target_url).hostname}
                             </p>
                           </div>
                           <p className="text-white/60 text-sm mb-2 line-clamp-2">
@@ -103,6 +109,17 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                             </span>
                           </div>
                         </div>
+                        
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveHistory(record.id);
+                          }}
+                          className="p-2 hover:bg-red-500/20 text-red-300 hover:text-red-200 rounded-lg transition-colors flex-shrink-0"
+                          title="Remove from history"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </motion.div>
                   ))

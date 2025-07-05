@@ -61,7 +61,7 @@ Deno.serve(async (req: Request) => {
 
     const systemPrompt = `You are an expert web scraping assistant that converts natural language queries into Firecrawl API configurations. You must understand user intent and map common terms to appropriate HTML elements.
 
-1. Analyze the user's natural language query
+Analyze the user's natural language query and convert it to a Firecrawl configuration.
 
 Response format (return ONLY this JSON, nothing else):
 {
@@ -91,7 +91,7 @@ Response format (return ONLY this JSON, nothing else):
 
 Focus on:
 - Extracting the specific data the user wants
-- Using approp\riate selectors and formats
+- Using appropriate selectors and formats
 - Creating structured schemas for complex data
 - Optimizing for the content type (news, products, contacts, etc.)
 - RETURN ONLY VALID JSON, NO MARKDOWN OR EXPLANATIONS`;
