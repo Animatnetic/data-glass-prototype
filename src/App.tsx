@@ -7,22 +7,17 @@ import {
   History,
   RefreshCw,
   ExternalLink,
-  LogIn,
   Plus,
   Trash2
 } from 'lucide-react';
-import { useAuth } from './hooks/useAuth';
-import { useScrapes } from './hooks/useScrapes';
-import { supabase } from './lib/supabase';
+import { useLocalHistory } from './hooks/useLocalHistory';
 import { DataTable } from './components/DataTable';
 import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
-import { AuthModal } from './components/AuthModal';
-import { UserMenu } from './components/UserMenu';
 import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
-import { ScrapeRecord } from './lib/supabase';
+import { LocalScrapeRecord } from './hooks/useLocalHistory';
 
 
 // Mock data for demonstration
@@ -43,8 +38,7 @@ interface UrlEntry {
 }
 
 function App() {
-  const { user, loading: authLoading } = useAuth();
-  const { scrapes, createScrape, deleteScrape } = useScrapes();
+  const { scrapes, createScrape, deleteScrape } = useLocalHistory();
   
   const [urls, setUrls] = useState<UrlEntry[]>([{ id: '1', url: '' }]);
   const [query, setQuery] = useState('');
@@ -53,7 +47,6 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const addUrl = () => {
     const newId = Date.now().toString();
@@ -124,8 +117,8 @@ function App() {
 
     try {
       // Check if Supabase Edge Functions are available
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
       
       let useEdgeFunctions = false;
       
@@ -230,7 +223,7 @@ function App() {
         });
 
         // Save to database if user is logged in
-        if (user && supabase && allExtractedData.length > 0) {
+        if (allExtractedData.length > 0) {
           await createScrape(
             validUrls.map(entry => entry.url),
             query,
@@ -372,7 +365,7 @@ function App() {
     }
   };
 
-  const handleHistorySelect = (record: any) => {
+  const handleHistorySelect = (record: LocalScrapeRecord) => {
     setResult({
       id: record.id,
       preview: record.preview_data || [],
@@ -404,14 +397,6 @@ function App() {
 
   const validUrlCount = urls.filter(entry => entry.url.trim() !== '').length;
   
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <LoadingSpinner message="Loading..." />
-      </div>
-    );
-  }
-  
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 p-4">
       <div className="container mx-auto max-w-6xl">
@@ -430,19 +415,7 @@ function App() {
             </p>
           </div>
           
-          <div className="flex items-center space-x-4">
-            {user ? (
-              <UserMenu />
-            ) : (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Sign In</span>
-              </button>
-            )}
-          </div>
+          <div className="flex items-center space-x-4"></div>
         </motion.div>
 
         {/* Main Interface */}
@@ -531,13 +504,10 @@ function App() {
                 <button
                   onClick={() => setIsHistoryOpen(true)}
                   className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-                  disabled={!user || !supabase}
-                  title={!supabase ? "Supabase not configured" : !user ? "Sign in to view history" : "View scrape history"}
+                  title="View scrape history"
                 >
                   <History className="w-5 h-5" />
                   <span>History</span>
-                  {!supabase && <span className="text-xs opacity-60">(Setup required)</span>}
-                  {supabase && !user && <span className="text-xs opacity-60">(Sign in required)</span>}
                 </button>
 
                 {result && (
@@ -674,11 +644,6 @@ function App() {
         onRemoveHistory={handleHistoryRemove}
       />
       
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
     </div>
   );
 }

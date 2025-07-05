@@ -1,20 +1,20 @@
 # DataGlass - Intelligent Web Scraping Platform
 
-DataGlass is a modern, serverless web scraping application built with React and Supabase. It allows users to extract data from any website using natural language queries.
+DataGlass is a modern web scraping application built with React. It allows users to extract data from any website using natural language queries with local history storage.
 
 ## Features
 
 - **Natural Language Queries**: Describe what you want to extract in plain English
-- **Serverless Edge Computing**: Fast, scalable scraping powered by Supabase Edge Functions
+- **Local History Storage**: Your scraping history is saved locally in your browser
 - **Interactive Data Tables**: View and filter extracted data with advanced table features
 - **Multiple Export Formats**: Download data as JSON or PDF
-- **Scraping History**: Access and restore previous scraping sessions
+- **Persistent History**: Access and restore previous scraping sessions stored locally
 - **Glassmorphism UI**: Beautiful, modern interface with frosted glass effects
 
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS, Framer Motion
-- **Backend**: Supabase (Database, Storage, Edge Functions)
+- **Storage**: Local Storage for history persistence
 - **Data Processing**: Deno with HTML parsing
 - **UI Components**: React Table, Syntax Highlighter, Lucide Icons
 
@@ -31,19 +31,10 @@ DataGlass is a modern, serverless web scraping application built with React and 
    npm run dev
    ```
 
-4. (Optional) Set up Supabase for advanced features:
-   - Click the "Connect to Supabase" button in the top right corner of the application
-   - This will automatically configure your Supabase connection and deploy Edge Functions
-   - Alternatively, create a new Supabase project manually:
-     - Go to https://supabase.com and create a new project
-     - Navigate to 'Project Settings' -> 'API'
-     - Copy your Project URL and anon/public key
-     - Update the `.env` file with your credentials
-     - Run the SQL migration in `supabase/migrations/`
-     - Deploy the Edge Functions (convert-query and execute-scrape)
-     - Set up the required secrets in your Supabase project:
-       - OPENAI_API_KEY: Your OpenAI API key
-       - FIRECRAWL_API_KEY: Your Firecrawl API key
+4. (Optional) Set up advanced AI-powered scraping:
+   - Deploy the Edge Functions to a serverless platform
+   - Set up environment variables for OpenAI and Firecrawl API keys
+   - Configure the application to use your deployed functions
 
 ## Usage
 
@@ -52,30 +43,29 @@ DataGlass is a modern, serverless web scraping application built with React and 
 3. Click "Extract Data" to start the scraping process
 4. View results in an interactive table or JSON format
 5. Download data as JSON, CSV, or Markdown
-6. (With Supabase) Access previous scrapes through the History panel and user authentication
+6. Access previous scrapes through the History panel (stored locally)
 
 ## Features
 
-### Basic Mode (No Setup Required)
+### Local Mode (No Setup Required)
 - Simple web scraping using CORS proxy
 - Basic content extraction (headlines, links, text)
 - Export to JSON, CSV, and Markdown
+- Local history storage in browser
 - Works immediately without any configuration
 
-### Advanced Mode (Requires Supabase Setup)
+### Advanced Mode (Requires Edge Function Setup)
 - AI-powered extraction using OpenAI and Firecrawl
 - Natural language query processing
-- User authentication and scrape history
 - Advanced data processing and extraction
 - Serverless Edge Functions for scalable processing
 
 ## Architecture
 
 - **Frontend**: React SPA with glassmorphism UI
-- **Edge Functions**: Deno-based serverless functions for scraping and PDF generation
-- **Database**: PostgreSQL for storing scrape results
-- **Storage**: Supabase Storage for generated files
-- **Deployment**: Vercel for frontend, Supabase for backend
+- **Storage**: Browser Local Storage for history
+- **Edge Functions**: Optional Deno-based serverless functions for advanced scraping
+- **Deployment**: Static hosting for frontend
 
 ## Contributing
 
