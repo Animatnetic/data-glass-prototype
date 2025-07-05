@@ -1,15 +1,14 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, ExternalLink, X, Trash2 } from 'lucide-react';
-import { ScrapeRecord } from '../lib/supabase';
 import { LocalScrapeRecord } from '../hooks/useLocalHistory';
 
 
 interface HistoryPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  history: (ScrapeRecord | LocalScrapeRecord)[];
-  onSelectHistory: (record: ScrapeRecord | LocalScrapeRecord) => void;
+  history: LocalScrapeRecord[];
+  onSelectHistory: (record: LocalScrapeRecord) => void;
   onRemoveHistory: (id: string) => void;
 }
 
