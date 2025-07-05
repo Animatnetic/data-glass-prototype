@@ -232,31 +232,28 @@ function App() {
       const successfulResults = scrapeData.results.filter(r => r.success);
       
       successfulResults.forEach(result => {
-        if (result.data?.extract) {
+        if (result.data?.extract && Array.isArray(result.data.extract)) {
           // Handle structured extraction
-          const extracted = result.data.extract;
-          if (Array.isArray(extracted)) {
-            allExtractedData.push(...extracted);
-          } else if (typeof extracted === 'object') {
-            // Flatten object properties that are arrays
-            Object.values(extracted).forEach(value => {
-              if (Array.isArray(value)) {
-                allExtractedData.push(...value);
-              } else {
-                allExtractedData.push(value);
-              }
+          allExtractedData.push(...result.data.extract);
+        } else if (result.data?.raw?.markdown || result.data?.raw?.html) {
+          // Handle fallback content
+          const content = result.data.raw.markdown || result.data.raw.html;
+          const lines = content.split('\n').filter(line => line.trim() && line.length > 10);
+          
+          lines.slice(0, 20).forEach((line, index) => {
+            allExtractedData.push({
+              content: line.trim(),
+              url: result.url,
+              title: result.data.metadata?.title || `Item ${index + 1}`,
+              source: 'raw_content',
+              index: index + 1
             });
-          }
-        } else if (result.data?.markdown || result.data?.html) {
-          // Handle raw content
-          allExtractedData.push({
-            content: result.data.markdown || result.data.html,
-            url: result.url,
-            title: result.data.metadata?.title,
-            description: result.data.metadata?.description
           });
         }
       });
+
+      console.log('All extracted data:', allExtractedData);
+      console.log('Total items found:', allExtractedData.length);
 
       setResult({
         id: `scrape-${Date.now()}`,
@@ -287,7 +284,7 @@ function App() {
 
     } catch (error) {
       console.error('Scraping error:', error);
-      setError(error.message || 'An error occurred during scraping. Check the console for details.');
+      setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
     } finally {
       setIsLoading(false);
     }
