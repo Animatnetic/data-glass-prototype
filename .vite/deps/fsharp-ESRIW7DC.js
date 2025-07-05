@@ -1,0 +1,6 @@
+import {
+  require_fsharp
+} from "./chunk-YZMIXCAU.js";
+import "./chunk-V4OQ3NZ2.js";
+export default require_fsharp();
+//# sourceMappingURL=fsharp-ESRIW7DC.js.map
