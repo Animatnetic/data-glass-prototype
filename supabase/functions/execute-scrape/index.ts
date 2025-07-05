@@ -371,8 +371,11 @@ Deno.serve(async (req: Request) => {
     console.log("Extraction schema:", JSON.stringify(extractionSchema, null, 2));
     console.log("User query:", userQuery);
 
-    // Process each URL
-    for (const url of urls) {
+    // Process all URLs concurrently using Promise.all
+    console.log(`\n=== STARTING CONCURRENT PROCESSING OF ${urls.length} URLs ===`);
+    const startTime = Date.now();
+    
+    const urlProcessingPromises = urls.map(async (url, urlIndex) => {
       console.log(`\n--- Processing URL: ${url} ---`);
       
       try {
@@ -649,7 +652,7 @@ Deno.serve(async (req: Request) => {
         console.log("Items extracted from this URL:", processedData.length);
         console.log("Extraction method used:", extractionMethod);
 
-        results.push({
+        return {
           url: url,
           data: {
             extract: processedData,
@@ -671,7 +674,7 @@ Deno.serve(async (req: Request) => {
             }
           },
           success: true
-        });
+        };
 
       } catch (error) {
         console.error(`Error scraping ${url}:`, error);
@@ -681,15 +684,33 @@ Deno.serve(async (req: Request) => {
           name: error.name
         });
         
-        results.push({
+        return {
           url: url,
           data: null,
           success: false,
           error: `Scraping error: ${error.message}`
-        });
+        };
       }
-    }
+    });
 
+    // Wait for all URL processing to complete
+    console.log("Waiting for all URLs to complete processing...");
+    const urlResults = await Promise.all(urlProcessingPromises);
+    
+    // Collect results and calculate totals
+    results.push(...urlResults);
+    totalItemsExtracted = urlResults.reduce((total, result) => {
+      if (result.success && result.data?.extract) {
+        return total + result.data.extract.length;
+      }
+      return total;
+    }, 0);
+    
+    const endTime = Date.now();
+    const processingTime = (endTime - startTime) / 1000;
+    console.log(`\n=== CONCURRENT PROCESSING COMPLETED ===`);
+    console.log(`Total processing time: ${processingTime.toFixed(2)} seconds`);
+    console.log(`Average time per URL: ${(processingTime / urls.length).toFixed(2)} seconds`);
     const successfulScrapes = results.filter(r => r.success).length;
     const failedScrapes = results.filter(r => !r.success).length;
 
