@@ -52,13 +52,13 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-        className="w-8 h-8 border-2 border-gray-300 border-t-gray-700 rounded-full"
+        className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full"
       />
       <motion.p
         key={currentMessage}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-gray-700 text-sm"
+        className="text-white/80 text-sm"
       >
         {currentMessage}
       </motion.p>

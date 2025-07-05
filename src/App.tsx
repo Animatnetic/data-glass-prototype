@@ -357,10 +357,10 @@ function App() {
           <GlassCard className="p-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-gray-700 text-sm font-medium mb-2">
+                <label className="block text-white/80 text-sm font-medium mb-2">
                   Target URLs ({validUrlCount} {validUrlCount === 1 ? 'URL' : 'URLs'})
                 </label>
-                <p className="text-gray-600 text-xs mb-3">
+                <p className="text-white/60 text-xs mb-3">
                   💡 Tip: You can paste multiple URLs separated by commas to automatically expand them
                 </p>
                 <div className="space-y-3">
@@ -372,20 +372,20 @@ function App() {
                       className="flex items-center space-x-3"
                     >
                       <div className="relative flex-1">
-                        <ExternalLink className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                        <ExternalLink className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40 w-5 h-5" />
                         <input
                           type="url"
                           value={urlEntry.url}
                           onChange={(e) => handleUrlChange(urlEntry.id, e.target.value)}
                           placeholder={index === 0 ? "https://example.com, https://site2.com, ..." : `https://example${index + 1}.com`}
-                          className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200 rounded-lg text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                          className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 transition-all"
                         />
                       </div>
                       
                       {urls.length > 1 && (
                         <button
                           onClick={() => removeUrl(urlEntry.id)}
-                          className="p-3 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                          className="p-3 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors"
                           title="Remove URL"
                         >
                           <Trash2 className="w-5 h-5" />
@@ -396,7 +396,7 @@ function App() {
                   
                   <button
                     onClick={addUrl}
-                    className="flex items-center space-x-2 px-4 py-2 bg-white/50 hover:bg-white/70 text-gray-700 rounded-lg transition-colors text-sm border border-gray-300 border-dashed"
+                    className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white/80 rounded-lg transition-colors text-sm border border-white/20 border-dashed"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add another URL</span>
@@ -405,17 +405,17 @@ function App() {
               </div>
 
               <div>
-                <label className="block text-gray-700 text-sm font-medium mb-2">
+                <label className="block text-white/80 text-sm font-medium mb-2">
                   What do you want to extract?
                 </label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40 w-5 h-5" />
                   <input
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="e.g., 'all headlines', 'product prices', 'contact information'"
-                    className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200 rounded-lg text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50 transition-all"
                   />
                 </div>
               </div>
@@ -424,7 +424,7 @@ function App() {
                 <button
                   onClick={handleScrape}
                   disabled={validUrlCount === 0 || !query || isLoading}
-                  className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+                  className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
                 >
                   {isLoading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -436,19 +436,19 @@ function App() {
 
                 <button
                   onClick={() => setIsHistoryOpen(true)}
-                  className="flex items-center space-x-2 px-4 py-3 bg-white/50 hover:bg-white/70 text-gray-700 rounded-lg transition-colors"
+                  className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
                   disabled={!user}
                   title={!user ? "Sign in to view history" : "View scrape history"}
                 >
                   <History className="w-5 h-5" />
                   <span>History</span>
-                  {!user && <span className="text-xs text-gray-500">(Sign in required)</span>}
+                  {!user && <span className="text-xs opacity-60">(Sign in required)</span>}
                 </button>
 
                 {result && (
                   <button
                     onClick={handleReset}
-                    className="flex items-center space-x-2 px-4 py-3 bg-white/50 hover:bg-white/70 text-gray-700 rounded-lg transition-colors"
+                    className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
                   >
                     <RefreshCw className="w-5 h-5" />
                     <span>New Scrape</span>
@@ -467,8 +467,8 @@ function App() {
 
           {/* Error State */}
           {error && (
-            <GlassCard className="p-6 border-red-300 bg-red-50">
-              <div className="text-red-600 text-center">
+           <GlassCard className="p-6 border-red-500/20 bg-red-500/10">
+             <div className="text-red-300 text-center">
                 <p className="font-medium mb-2">Error</p>
                 <p className="text-sm">{error}</p>
               </div>
@@ -482,15 +482,15 @@ function App() {
                 {/* Results Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                    <h3 className="text-xl font-semibold text-white mb-2">
                       Extraction Results
                     </h3>
                     <div className="space-y-1">
-                      <p className="text-gray-600 text-sm">
+                      <p className="text-white/60 text-sm">
                         Found {result.total_items} items from {result.urls_processed || 1} {result.urls_processed === 1 ? 'URL' : 'URLs'}
                       </p>
                       {result.extraction_method && (
-                        <p className="text-gray-500 text-xs">
+                        <p className="text-white/50 text-xs">
                           Extraction method: {result.extraction_method}
                           {result.used_chatgpt && (
                             <span className="ml-2 px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">
@@ -533,13 +533,13 @@ function App() {
                 </div>
 
                 {/* View Mode Tabs */}
-                <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex space-x-1 bg-white/5 rounded-lg p-1">
                   <button
                     onClick={() => setViewMode('table')}
                     className={`flex-1 py-2 px-4 rounded-md transition-colors text-sm font-medium ${
                       viewMode === 'table'
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-600 hover:text-gray-800'
+                        ? 'bg-blue-500 text-white'
+                        : 'text-white/70 hover:text-white'
                     }`}
                   >
                     Table View
@@ -548,8 +548,8 @@ function App() {
                     onClick={() => setViewMode('json')}
                     className={`flex-1 py-2 px-4 rounded-md transition-colors text-sm font-medium ${
                       viewMode === 'json'
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-600 hover:text-gray-800'
+                        ? 'bg-blue-500 text-white'
+                        : 'text-white/70 hover:text-white'
                     }`}
                   >
                     JSON Source
@@ -557,7 +557,7 @@ function App() {
                 </div>
 
                 {/* Data Display */}
-                <div className="bg-white/70 rounded-lg p-4">
+                <div className="bg-white/5 rounded-lg p-4">
                   {viewMode === 'table' ? (
                     <DataTable data={result?.raw_data || mockData} />
                   ) : (

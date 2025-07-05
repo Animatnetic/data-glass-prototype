@@ -40,25 +40,25 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed right-0 top-0 h-full w-96 bg-white/10 backdrop-blur-xl border-l border-white/20 z-50"
           >
-            <div className="p-6 h-full flex flex-col bg-white/80 backdrop-blur-xl">
+            <div className="p-6 h-full flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-2">
-                  <Clock className="w-5 h-5 text-gray-600" />
-                  <h2 className="text-xl font-semibold text-gray-800">Scrape History</h2>
+                  <Clock className="w-5 h-5 text-white/70" />
+                  <h2 className="text-xl font-semibold text-white">Scrape History</h2>
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-600" />
+                  <X className="w-5 h-5 text-white/70" />
                 </button>
               </div>
 
               {/* History List */}
               <div className="flex-1 overflow-y-auto space-y-3">
                 {history.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-white/50">
                     No scrapes yet
                   </div>
                 ) : (
@@ -67,7 +67,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                       key={record.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-white/60 rounded-lg p-4 hover:bg-white/80 transition-colors"
+                      className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div 
@@ -75,17 +75,17 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                           onClick={() => onSelectHistory(record)}
                         >
                           <div className="flex items-center space-x-2 mb-2">
-                            <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                            <p className="text-gray-700 text-sm font-medium truncate">
+                            <ExternalLink className="w-4 h-4 text-white/40 flex-shrink-0" />
+                            <p className="text-white/80 text-sm font-medium truncate">
                               {record.target_urls.length > 1 
                                 ? `${record.target_urls.length} URLs` 
                                 : record.target_urls[0] ? new URL(record.target_urls[0]).hostname : 'Unknown URL'}
                             </p>
                           </div>
-                          <p className="text-gray-600 text-sm mb-2 line-clamp-2">
+                          <p className="text-white/60 text-sm mb-2 line-clamp-2">
                             "{record.user_query}"
                           </p>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
+                          <div className="flex items-center justify-between text-xs text-white/40">
                             <span>
                               {new Date(record.created_at).toLocaleString()}
                             </span>
@@ -106,7 +106,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                             e.stopPropagation();
                             onRemoveHistory(record.id);
                           }}
-                          className="p-2 hover:bg-red-100 text-red-500 hover:text-red-600 rounded-lg transition-colors flex-shrink-0"
+                          className="p-2 hover:bg-red-500/20 text-red-300 hover:text-red-200 rounded-lg transition-colors flex-shrink-0"
                           title="Remove from history"
                         >
                           <Trash2 className="w-4 h-4" />

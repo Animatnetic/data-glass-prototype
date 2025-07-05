@@ -69,6 +69,7 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-white/60">
         No data available
       </div>
     );
@@ -78,12 +79,12 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
     <div className="space-y-4">
       {/* Global Filter */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/40 w-4 h-4" />
         <input
           value={globalFilter}
           onChange={e => setGlobalFilter(e.target.value)}
           placeholder="Search all columns..."
-          className="w-full pl-10 pr-4 py-2 bg-white/70 border border-gray-200 rounded-lg text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400/50"
         />
       </div>
 
@@ -96,12 +97,12 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
                 {headerGroup.headers.map(header => (
                   <th
                     key={header.id}
-                    className="px-4 py-3 text-left text-gray-700 font-medium border-b border-gray-200"
+                    className="px-4 py-3 text-left text-white/80 font-medium border-b border-white/10"
                   >
                     {header.isPlaceholder ? null : (
                       <div
                         className={`flex items-center space-x-2 ${
-                          header.column.getCanSort() ? 'cursor-pointer hover:text-gray-900' : ''
+                          header.column.getCanSort() ? 'cursor-pointer hover:text-white' : ''
                         }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
@@ -112,12 +113,12 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
                           <div className="flex flex-col">
                             <ChevronUp 
                               className={`w-3 h-3 ${
-                                header.column.getIsSorted() === 'asc' ? 'text-blue-600' : 'text-gray-400'
+                                header.column.getIsSorted() === 'asc' ? 'text-blue-300' : 'text-white/30'
                               }`} 
                             />
                             <ChevronDown 
                               className={`w-3 h-3 -mt-1 ${
-                                header.column.getIsSorted() === 'desc' ? 'text-blue-600' : 'text-gray-400'
+                                header.column.getIsSorted() === 'desc' ? 'text-blue-300' : 'text-white/30'
                               }`} 
                             />
                           </div>
@@ -133,10 +134,10 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
             {table.getRowModel().rows.map(row => (
               <tr 
                 key={row.id} 
-                className="hover:bg-gray-50 transition-colors duration-150"
+                className="hover:bg-white/5 transition-colors duration-150"
               >
                 {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} className="px-4 py-3 text-gray-700 border-b border-gray-100">
+                  <td key={cell.id} className="px-4 py-3 text-white/70 border-b border-white/5">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -147,7 +148,7 @@ export const DataTable: React.FC<DataTableProps> = ({ data }) => {
       </div>
 
       {/* Table Info */}
-      <div className="text-sm text-gray-500 text-center">
+      <div className="text-sm text-white/50 text-center">
         Showing {table.getFilteredRowModel().rows.length} of {data.length} results
       </div>
     </div>
