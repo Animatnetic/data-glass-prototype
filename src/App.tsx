@@ -369,10 +369,10 @@ function App() {
     setResult({
       id: record.id,
       preview: record.preview_data || [],
-      total_items: record.results.length,
+      total_items: record.total_items,
       status: 'completed',
       raw_data: record.results,
-      extraction_method: 'database',
+      extraction_method: 'local_storage',
       used_chatgpt: false,
       specific_data_type: null
     });

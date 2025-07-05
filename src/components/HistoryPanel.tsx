@@ -80,7 +80,13 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                             <p className="text-white/80 text-sm font-medium truncate">
                               {record.target_urls.length > 1 
                                 ? `${record.target_urls.length} URLs` 
-                                : record.target_urls[0] ? new URL(record.target_urls[0]).hostname : 'Unknown URL'}
+                                : record.target_urls[0] ? (() => {
+                                    try {
+                                      return new URL(record.target_urls[0]).hostname;
+                                    } catch {
+                                      return record.target_urls[0];
+                                    }
+                                  })() : 'Unknown URL'}
                             </p>
                           </div>
                           <p className="text-white/60 text-sm mb-2 line-clamp-2">
