@@ -314,7 +314,7 @@ function App() {
                   Target URLs ({validUrlCount} {validUrlCount === 1 ? 'URL' : 'URLs'})
                 </label>
                 <p className="text-white/60 text-xs mb-3">
-                  💡 Tip: You can paste multiple URLs separated by commas in any field to automatically expand them
+                  💡 Tip: You can paste multiple URLs separated by commas to automatically expand them
                 </p>
                 <div className="space-y-3">
                   {urls.map((urlEntry, index) => (
