@@ -118,123 +118,119 @@ function App() {
     const validUrls = urls.filter(entry => entry.url.trim() !== '');
     if (validUrls.length === 0 || !query) return;
 
-    // Check if Supabase is configured
-    if (!supabase) {
-      setError('Supabase is not configured. Please set up your Supabase project credentials in the .env file.');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      // Step 1: Convert natural language query to Firecrawl configuration
-      console.log('Starting query conversion...', { query, validUrls });
-      
+      // Check if Supabase Edge Functions are available
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       
-      if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your_supabase_url' || supabaseAnonKey === 'your_supabase_anon_key') {
-        throw new Error('Supabase environment variables are not properly configured. Please check your .env file.');
-      }
+      let useEdgeFunctions = false;
       
-      const convertResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userQuery: query,
-          urls: validUrls.map(entry => entry.url)
-        }),
-      });
-
-      console.log('Convert response status:', convertResponse.status);
-      
-      if (!convertResponse.ok) {
-        const errorData = await convertResponse.json();
-        console.error('Convert query error:', errorData);
-        throw new Error(`Failed to convert query: ${errorData.error || 'Unknown error'}`);
-      }
-
-      const { firecrawlConfig, extractionSchema } = await convertResponse.json();
-      console.log('Conversion successful:', { firecrawlConfig, extractionSchema });
-
-      // Step 2: Execute the scraping with Firecrawl
-      console.log('Starting scrape execution...');
-      
-      const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-scrape`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          urls: validUrls.map(entry => entry.url),
-          firecrawlConfig,
-          extractionSchema,
-          userQuery: query
-        }),
-      });
-
-      console.log('Scrape response status:', scrapeResponse.status);
-      
-      if (!scrapeResponse.ok) {
-        const errorData = await scrapeResponse.json();
-        console.error('Scrape execution error:', errorData);
-        throw new Error(`Failed to execute scraping: ${errorData.error || 'Unknown error'}`);
-      }
-
-      const scrapeData = await scrapeResponse.json();
-      console.log('Scraping successful:', scrapeData);
-
-      // Process results for display
-      const allExtractedData = [];
-      const successfulResults = scrapeData.results.filter(r => r.success);
-      
-      successfulResults.forEach(result => {
-        if (result.data?.extract && Array.isArray(result.data.extract)) {
-          // Handle structured extraction
-          allExtractedData.push(...result.data.extract);
-        } else if (result.data?.raw?.markdown || result.data?.raw?.html) {
-          // Handle fallback content
-          const content = result.data.raw.markdown || result.data.raw.html;
-          const lines = content.split('\n').filter(line => line.trim() && line.length > 10);
-          
-          lines.slice(0, 20).forEach((line, index) => {
-            allExtractedData.push({
-              content: line.trim(),
-              url: result.url,
-              title: result.data.metadata?.title || `Item ${index + 1}`,
-              source: 'raw_content',
-              index: index + 1
-            });
+      if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'your_supabase_url' && supabaseAnonKey !== 'your_supabase_anon_key') {
+        // Test if Edge Functions are available
+        try {
+          const testResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ test: true }),
           });
+          
+          if (testResponse.status !== 404) {
+            useEdgeFunctions = true;
+          }
+        } catch (error) {
+          console.log('Edge Functions not available, using fallback mode');
         }
-      });
+      }
 
-      console.log('All extracted data:', allExtractedData);
-      console.log('Total items found:', allExtractedData.length);
+      if (useEdgeFunctions) {
+        // Use Supabase Edge Functions
+        console.log('Using Supabase Edge Functions for scraping...');
+        
+        const convertResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userQuery: query,
+            urls: validUrls.map(entry => entry.url)
+          }),
+        });
 
-      setResult({
-        id: `scrape-${Date.now()}`,
-        preview: allExtractedData.slice(0, 10),
-        total_items: scrapeData.summary.total_items_extracted,
-        status: 'completed',
-        urls_processed: scrapeData.summary.successful_scrapes,
-        failed_urls: scrapeData.summary.failed_scrapes,
-        raw_data: allExtractedData,
-        extraction_method: scrapeData.results[0]?.data?.metadata?.extractionMethod || 'unknown',
-        used_chatgpt: scrapeData.results.some(r => r.data?.metadata?.usedChatGPT) || false,
-        specific_data_type: scrapeData.results[0]?.data?.metadata?.specificDataType || null
-      });
+        if (!convertResponse.ok) {
+          const errorData = await convertResponse.json();
+          throw new Error(`Failed to convert query: ${errorData.error || 'Unknown error'}`);
+        }
 
-      // Add successful scrape to history
-      if (allExtractedData.length > 0) {
+        const { firecrawlConfig, extractionSchema } = await convertResponse.json();
+        
+        const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-scrape`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            urls: validUrls.map(entry => entry.url),
+            firecrawlConfig,
+            extractionSchema,
+            userQuery: query
+          }),
+        });
+
+        if (!scrapeResponse.ok) {
+          const errorData = await scrapeResponse.json();
+          throw new Error(`Failed to execute scraping: ${errorData.error || 'Unknown error'}`);
+        }
+
+        const scrapeData = await scrapeResponse.json();
+        
+        // Process results for display
+        const allExtractedData = [];
+        const successfulResults = scrapeData.results.filter(r => r.success);
+        
+        successfulResults.forEach(result => {
+          if (result.data?.extract && Array.isArray(result.data.extract)) {
+            allExtractedData.push(...result.data.extract);
+          } else if (result.data?.raw?.markdown || result.data?.raw?.html) {
+            const content = result.data.raw.markdown || result.data.raw.html;
+            const lines = content.split('\n').filter(line => line.trim() && line.length > 10);
+            
+            lines.slice(0, 20).forEach((line, index) => {
+              allExtractedData.push({
+                content: line.trim(),
+                url: result.url,
+                title: result.data.metadata?.title || `Item ${index + 1}`,
+                source: 'raw_content',
+                index: index + 1
+              });
+            });
+          }
+        });
+
+        setResult({
+          id: `scrape-${Date.now()}`,
+          preview: allExtractedData.slice(0, 10),
+          total_items: scrapeData.summary.total_items_extracted,
+          status: 'completed',
+          urls_processed: scrapeData.summary.successful_scrapes,
+          failed_urls: scrapeData.summary.failed_scrapes,
+          raw_data: allExtractedData,
+          extraction_method: scrapeData.results[0]?.data?.metadata?.extractionMethod || 'edge_functions',
+          used_chatgpt: scrapeData.results.some(r => r.data?.metadata?.usedChatGPT) || false,
+          specific_data_type: scrapeData.results[0]?.data?.metadata?.specificDataType || null
+        });
+
         // Save to database if user is logged in
-        if (user) {
+        if (user && supabase && allExtractedData.length > 0) {
           await createScrape(
             validUrls.map(entry => entry.url),
             query,
@@ -242,15 +238,100 @@ function App() {
             allExtractedData.slice(0, 3)
           );
         }
+      } else {
+        // Fallback mode - simple web scraping without Edge Functions
+        console.log('Using fallback mode for scraping...');
+        
+        const allExtractedData = [];
+        
+        for (const urlEntry of validUrls) {
+          try {
+            // Simple fetch to get basic content
+            const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlEntry.url)}`);
+            const data = await response.json();
+            
+            if (data.contents) {
+              // Parse basic content
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(data.contents, 'text/html');
+              
+              // Extract based on query type
+              if (query.toLowerCase().includes('headline') || query.toLowerCase().includes('title')) {
+                const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                headings.forEach((heading, index) => {
+                  if (heading.textContent?.trim()) {
+                    allExtractedData.push({
+                      title: heading.textContent.trim(),
+                      type: 'heading',
+                      level: heading.tagName.toLowerCase(),
+                      url: urlEntry.url,
+                      index: index + 1,
+                      source: 'fallback_scraping'
+                    });
+                  }
+                });
+              } else if (query.toLowerCase().includes('link')) {
+                const links = doc.querySelectorAll('a[href]');
+                links.forEach((link, index) => {
+                  if (link.textContent?.trim() && link.getAttribute('href')) {
+                    allExtractedData.push({
+                      title: link.textContent.trim(),
+                      url: link.getAttribute('href'),
+                      type: 'link',
+                      source_url: urlEntry.url,
+                      index: index + 1,
+                      source: 'fallback_scraping'
+                    });
+                  }
+                });
+              } else {
+                // General content extraction
+                const paragraphs = doc.querySelectorAll('p, div, span');
+                let contentIndex = 0;
+                paragraphs.forEach((element) => {
+                  const text = element.textContent?.trim();
+                  if (text && text.length > 20 && contentIndex < 20) {
+                    allExtractedData.push({
+                      content: text,
+                      type: 'text',
+                      url: urlEntry.url,
+                      index: contentIndex + 1,
+                      source: 'fallback_scraping'
+                    });
+                    contentIndex++;
+                  }
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`Error scraping ${urlEntry.url}:`, error);
+            // Add error entry
+            allExtractedData.push({
+              error: `Failed to scrape ${urlEntry.url}: ${error.message}`,
+              url: urlEntry.url,
+              type: 'error',
+              source: 'fallback_scraping'
+            });
+          }
+        }
+
+        setResult({
+          id: `scrape-${Date.now()}`,
+          preview: allExtractedData.slice(0, 10),
+          total_items: allExtractedData.length,
+          status: 'completed',
+          urls_processed: validUrls.length,
+          failed_urls: 0,
+          raw_data: allExtractedData,
+          extraction_method: 'fallback_mode',
+          used_chatgpt: false,
+          specific_data_type: null
+        });
       }
 
     } catch (error) {
       console.error('Scraping error:', error);
-      if (error.message?.includes('Failed to fetch')) {
-        setError('Unable to connect to Supabase Edge Functions. Please ensure your Supabase project is properly configured and the Edge Functions are deployed.');
-      } else {
-        setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
-      }
+      setError(`${error.message || 'An error occurred during scraping'}. Check the browser console for detailed logs.`);
     } finally {
       setIsLoading(false);
     }

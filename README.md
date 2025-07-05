@@ -26,37 +26,48 @@ DataGlass is a modern, serverless web scraping application built with React and 
    npm install
    ```
 
-3. Set up Supabase:
-   - Click the "Connect to Supabase" button in the top right corner of the application
-   - This will automatically configure your Supabase connection
-   - Alternatively, create a new Supabase project manually:
-     - Go to https://supabase.com and create a new project
-     - Navigate to 'Project Settings' -> 'API'
-     - Copy your Project URL and anon/public key
-   - Run the SQL migration in `supabase/migrations/create_scrapes_table.sql`
-   - Deploy the Edge Functions (convert-query and execute-scrape)
-   - Set up the required secrets in your Supabase project:
-     - OPENAI_API_KEY: Your OpenAI API key
-     - FIRECRAWL_API_KEY: Your Firecrawl API key
-
-4. Configure environment variables:
-   If you set up Supabase manually, update the `.env` file with your credentials:
-   - `VITE_SUPABASE_URL`: Your Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY`: Your Supabase anon/public key
-
-5. Start the development server:
+3. Start the development server:
    ```bash
    npm run dev
    ```
 
+4. (Optional) Set up Supabase for advanced features:
+   - Click the "Connect to Supabase" button in the top right corner of the application
+   - This will automatically configure your Supabase connection and deploy Edge Functions
+   - Alternatively, create a new Supabase project manually:
+     - Go to https://supabase.com and create a new project
+     - Navigate to 'Project Settings' -> 'API'
+     - Copy your Project URL and anon/public key
+     - Update the `.env` file with your credentials
+     - Run the SQL migration in `supabase/migrations/`
+     - Deploy the Edge Functions (convert-query and execute-scrape)
+     - Set up the required secrets in your Supabase project:
+       - OPENAI_API_KEY: Your OpenAI API key
+       - FIRECRAWL_API_KEY: Your Firecrawl API key
+
 ## Usage
 
-1. Enter a target URL (e.g., `https://example.com`)
+1. Enter a target URL (e.g., `https://example.com`) 
 2. Describe what you want to extract (e.g., "all headlines", "product prices")
 3. Click "Extract Data" to start the scraping process
 4. View results in an interactive table or JSON format
-5. Download data as JSON or PDF
-6. Access previous scrapes through the History panel
+5. Download data as JSON, CSV, or Markdown
+6. (With Supabase) Access previous scrapes through the History panel and user authentication
+
+## Features
+
+### Basic Mode (No Setup Required)
+- Simple web scraping using CORS proxy
+- Basic content extraction (headlines, links, text)
+- Export to JSON, CSV, and Markdown
+- Works immediately without any configuration
+
+### Advanced Mode (Requires Supabase Setup)
+- AI-powered extraction using OpenAI and Firecrawl
+- Natural language query processing
+- User authentication and scrape history
+- Advanced data processing and extraction
+- Serverless Edge Functions for scalable processing
 
 ## Architecture
 
