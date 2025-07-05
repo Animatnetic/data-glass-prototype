@@ -30,18 +30,191 @@ interface ExecuteScrapeResponse {
   debug?: any;
 }
 
-// Helper function to extract specific data types from text
-const extractSpecificData = (text: string, dataType: string): any[] => {
+// Helper function to detect if user wants specific data types
+const detectSpecificDataRequest = (userQuery: string): string | null => {
+  const query = userQuery.toLowerCase();
+  
+  // Email patterns
+  if (query.includes('email') || query.includes('e-mail') || query.includes('contact')) {
+    return 'emails';
+  }
+  
+  // Phone patterns
+  if (query.includes('phone') || query.includes('telephone') || query.includes('mobile') || query.includes('cell')) {
+    return 'phone_numbers';
+  }
+  
+  // Address patterns
+  if (query.includes('address') || query.includes('location') || query.includes('street')) {
+    return 'addresses';
+  }
+  
+  // Price patterns
+  if (query.includes('price') || query.includes('cost') || query.includes('fee') || query.includes('$')) {
+    return 'prices';
+  }
+  
+  // Name patterns
+  if (query.includes('name') || query.includes('person') || query.includes('people')) {
+    return 'names';
+  }
+  
+  // Date patterns
+  if (query.includes('date') || query.includes('time') || query.includes('when')) {
+    return 'dates';
+  }
+  
+  // URL/Link patterns
+  if (query.includes('link') || query.includes('url') || query.includes('website')) {
+    return 'links';
+  }
+  
+  return null; // No specific data type detected
+};
+
+// Function to use ChatGPT for specific data extraction
+const extractSpecificDataWithChatGPT = async (content: string, userQuery: string, dataType: string, openaiApiKey: string): Promise<any[]> => {
+  console.log(`\n=== CHATGPT SPECIFIC DATA EXTRACTION ===`);
+  console.log(`Data type: ${dataType}`);
+  console.log(`User query: ${userQuery}`);
+  console.log(`Content length: ${content.length} characters`);
+
+  const systemPrompt = `You are a precise data extraction specialist. Your job is to analyze webpage content and extract ONLY the specific type of data requested by the user.
+
+CRITICAL INSTRUCTIONS:
+1. Extract ONLY the specific data type requested - nothing else
+2. Return results as a JSON array of objects
+3. Each object should have relevant properties for the data type
+4. If no data of the requested type is found, return an empty array
+5. Be extremely precise - don't include similar but different data types
+6. Include context or source information when helpful
+
+DATA TYPE EXTRACTION RULES:
+
+For EMAILS:
+- Extract only valid email addresses
+- Format: [{"email": "example@domain.com", "context": "surrounding text"}]
+
+For PHONE NUMBERS:
+- Extract phone numbers in any format
+- Format: [{"phone": "+1-555-123-4567", "formatted": "555-123-4567", "context": "surrounding text"}]
+
+For ADDRESSES:
+- Extract physical addresses
+- Format: [{"address": "123 Main St, City, State", "type": "street_address", "context": "surrounding text"}]
+
+For PRICES:
+- Extract monetary amounts and prices
+- Format: [{"price": "$99.99", "currency": "USD", "item": "product name", "context": "surrounding text"}]
+
+For NAMES:
+- Extract person names
+- Format: [{"name": "John Doe", "type": "person", "context": "surrounding text"}]
+
+For DATES:
+- Extract dates and times
+- Format: [{"date": "2024-01-15", "original": "January 15, 2024", "context": "surrounding text"}]
+
+For LINKS:
+- Extract URLs and links
+- Format: [{"url": "https://example.com", "title": "link text", "context": "surrounding text"}]
+
+RESPONSE FORMAT: Return ONLY a valid JSON array, no explanations or markdown.`;
+
+  const userPrompt = `WEBPAGE CONTENT:
+${content}
+
+USER REQUEST: "${userQuery}"
+EXTRACT ONLY: ${dataType}
+
+Analyze the content above and extract ONLY ${dataType} as requested. Return a JSON array of objects with the extracted data.`;
+
+  try {
+    console.log("Making ChatGPT request for specific data extraction...");
+    
+    const chatGPTResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: userPrompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      }),
+    });
+
+    if (!chatGPTResponse.ok) {
+      const errorText = await chatGPTResponse.text();
+      console.error("ChatGPT API error:", errorText);
+      return [];
+    }
+
+    const chatGPTData = await chatGPTResponse.json();
+    const assistantMessage = chatGPTData.choices?.[0]?.message?.content;
+
+    if (!assistantMessage) {
+      console.error("No response from ChatGPT");
+      return [];
+    }
+
+    console.log("ChatGPT raw response:", assistantMessage);
+
+    // Parse the JSON response
+    let extractedData;
+    try {
+      // Clean the response
+      let cleanedResponse = assistantMessage.trim();
+      
+      // Remove markdown code blocks if present
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      extractedData = JSON.parse(cleanedResponse);
+      
+      if (!Array.isArray(extractedData)) {
+        console.error("ChatGPT response is not an array:", extractedData);
+        return [];
+      }
+      
+      console.log(`Successfully extracted ${extractedData.length} ${dataType} items`);
+      return extractedData;
+      
+    } catch (parseError) {
+      console.error("Failed to parse ChatGPT response:", parseError);
+      console.error("Raw response:", assistantMessage);
+      return [];
+    }
+    
+  } catch (error) {
+    console.error("Error in ChatGPT specific data extraction:", error);
+    return [];
+  }
+};
+
+// Helper function to extract specific data types from text using regex (fallback)
+const extractSpecificDataRegex = (text: string, dataType: string): any[] => {
   const results = [];
   
-  switch (dataType.toLowerCase()) {
-    case 'email':
+  switch (dataType) {
     case 'emails':
-    case 'email addresses':
       const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
       const emails = text.match(emailRegex) || [];
       emails.forEach((email, index) => {
-        // Get context around the email
         const emailIndex = text.indexOf(email);
         const contextStart = Math.max(0, emailIndex - 50);
         const contextEnd = Math.min(text.length, emailIndex + email.length + 50);
@@ -51,14 +224,13 @@ const extractSpecificData = (text: string, dataType: string): any[] => {
           email: email,
           context: context,
           _index: index,
-          _type: 'email'
+          _type: 'email',
+          _extraction_method: 'regex'
         });
       });
       break;
       
-    case 'phone':
-    case 'phones':
-    case 'phone numbers':
+    case 'phone_numbers':
       const phoneRegex = /(\+?1?[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/g;
       const phones = text.match(phoneRegex) || [];
       phones.forEach((phone, index) => {
@@ -71,15 +243,13 @@ const extractSpecificData = (text: string, dataType: string): any[] => {
           phone: phone.trim(),
           context: context,
           _index: index,
-          _type: 'phone'
+          _type: 'phone',
+          _extraction_method: 'regex'
         });
       });
       break;
       
-    case 'price':
     case 'prices':
-    case 'cost':
-    case 'costs':
       const priceRegex = /\$[\d,]+\.?\d*|\$\d+|[\d,]+\.?\d*\s*(dollars?|USD|usd)/g;
       const prices = text.match(priceRegex) || [];
       prices.forEach((price, index) => {
@@ -92,15 +262,13 @@ const extractSpecificData = (text: string, dataType: string): any[] => {
           price: price.trim(),
           context: context,
           _index: index,
-          _type: 'price'
+          _type: 'price',
+          _extraction_method: 'regex'
         });
       });
       break;
       
-    case 'url':
-    case 'urls':
     case 'links':
-    case 'link':
       const urlRegex = /https?:\/\/[^\s)]+/g;
       const urls = text.match(urlRegex) || [];
       urls.forEach((url, index) => {
@@ -113,7 +281,8 @@ const extractSpecificData = (text: string, dataType: string): any[] => {
           url: url.trim(),
           context: context,
           _index: index,
-          _type: 'url'
+          _type: 'url',
+          _extraction_method: 'regex'
         });
       });
       break;
@@ -156,9 +325,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY");
-    console.log("Firecrawl API key check:", {
-      hasKey: !!firecrawlApiKey,
-      keyPrefix: firecrawlApiKey?.substring(0, 10) + "..." || "NOT_FOUND"
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    
+    console.log("API keys check:", {
+      hasFirecrawl: !!firecrawlApiKey,
+      hasOpenAI: !!openaiApiKey,
+      firecrawlPrefix: firecrawlApiKey?.substring(0, 10) + "..." || "NOT_FOUND"
     });
 
     if (!firecrawlApiKey) {
@@ -173,6 +345,23 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
+
+    if (!openaiApiKey) {
+      console.error("OpenAI API key not found in environment");
+      return new Response(
+        JSON.stringify({ 
+          error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables."
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Detect if user wants specific data extraction
+    const specificDataType = detectSpecificDataRequest(userQuery);
+    console.log("Specific data type detected:", specificDataType);
 
     const results: ScrapeResult[] = [];
     let totalItemsExtracted = 0;
@@ -257,84 +446,131 @@ Deno.serve(async (req: Request) => {
         console.log("Firecrawl response data keys:", Object.keys(firecrawlData.data || {}));
         console.log("Firecrawl success:", firecrawlData.success);
         
-        // Process the response based on format used
-        let extractedData = null;
+        // Get the raw content for processing
+        let rawContent = "";
+        if (firecrawlData.data?.markdown) {
+          rawContent = firecrawlData.data.markdown;
+        } else if (firecrawlData.data?.html) {
+          rawContent = firecrawlData.data.html;
+        } else if (firecrawlData.data?.extract) {
+          // If we have extracted data, convert it to text for further processing
+          rawContent = JSON.stringify(firecrawlData.data.extract, null, 2);
+        }
+
+        console.log("Raw content length:", rawContent.length);
+
         let processedData = [];
-        
-        // Check if we have extraction schema results (extract format)
+        let extractionMethod = "general";
+
+        // Step 1: Check if we have structured extraction results
         if (firecrawlData.data?.extract) {
-          console.log("Found extracted data:", JSON.stringify(firecrawlData.data.extract, null, 2));
-          extractedData = firecrawlData.data.extract;
+          console.log("Found extracted data from Firecrawl:", JSON.stringify(firecrawlData.data.extract, null, 2));
           
-          // Process extracted data
-          if (Array.isArray(extractedData)) {
-            processedData = extractedData.map((item, index) => ({
-              ...item,
-              _index: index,
-              _source: 'extracted',
-              _url: url
-            }));
-            totalItemsExtracted += extractedData.length;
-          } else if (typeof extractedData === 'object' && extractedData !== null) {
-            // Flatten object properties that are arrays
-            Object.entries(extractedData).forEach(([key, value]) => {
-              if (Array.isArray(value)) {
-                const items = value.map((item, index) => ({
-                  ...item,
-                  _index: index,
-                  _source: key,
-                  _url: url,
-                  _category: key
-                }));
-                processedData.push(...items);
-                totalItemsExtracted += value.length;
-              } else if (value && typeof value === 'object') {
-                processedData.push({ 
-                  ...value, 
-                  _source: key,
-                  _url: url,
-                  _category: key
-                });
-                totalItemsExtracted += 1;
-              } else if (value !== null && value !== undefined) {
-                processedData.push({ 
-                  [key]: value, 
-                  _source: 'extracted',
-                  _url: url,
-                  _category: key
-                });
-                totalItemsExtracted += 1;
-              }
-            });
+          // If user wants specific data and we have content, use ChatGPT for precision
+          if (specificDataType && rawContent.length > 0) {
+            console.log("Using ChatGPT for specific data extraction...");
+            const chatGPTResults = await extractSpecificDataWithChatGPT(rawContent, userQuery, specificDataType, openaiApiKey);
+            
+            if (chatGPTResults.length > 0) {
+              processedData = chatGPTResults.map((item, index) => ({
+                ...item,
+                _index: index,
+                _source: 'chatgpt_specific',
+                _url: url,
+                _extraction_method: 'chatgpt'
+              }));
+              extractionMethod = "chatgpt_specific";
+              totalItemsExtracted += chatGPTResults.length;
+            } else {
+              // Fallback to regex extraction
+              console.log("ChatGPT returned no results, trying regex fallback...");
+              const regexResults = extractSpecificDataRegex(rawContent, specificDataType);
+              processedData = regexResults.map((item, index) => ({
+                ...item,
+                _url: url
+              }));
+              extractionMethod = "regex_fallback";
+              totalItemsExtracted += regexResults.length;
+            }
           } else {
-            processedData = [{ 
-              content: extractedData, 
-              _source: 'extracted',
-              _url: url
-            }];
-            totalItemsExtracted += 1;
+            // Process Firecrawl extracted data normally
+            const extractedData = firecrawlData.data.extract;
+            if (Array.isArray(extractedData)) {
+              processedData = extractedData.map((item, index) => ({
+                ...item,
+                _index: index,
+                _source: 'firecrawl_extract',
+                _url: url
+              }));
+              totalItemsExtracted += extractedData.length;
+            } else if (typeof extractedData === 'object' && extractedData !== null) {
+              Object.entries(extractedData).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                  const items = value.map((item, index) => ({
+                    ...item,
+                    _index: index,
+                    _source: key,
+                    _url: url,
+                    _category: key
+                  }));
+                  processedData.push(...items);
+                  totalItemsExtracted += value.length;
+                } else if (value && typeof value === 'object') {
+                  processedData.push({ 
+                    ...value, 
+                    _source: key,
+                    _url: url,
+                    _category: key
+                  });
+                  totalItemsExtracted += 1;
+                } else if (value !== null && value !== undefined) {
+                  processedData.push({ 
+                    [key]: value, 
+                    _source: 'firecrawl_extract',
+                    _url: url,
+                    _category: key
+                  });
+                  totalItemsExtracted += 1;
+                }
+              });
+            }
+            extractionMethod = "firecrawl_extract";
           }
         } 
-        // Fallback to markdown/html content processing with specific data extraction
-        else if (firecrawlData.data?.markdown || firecrawlData.data?.html) {
-          console.log("No extracted data, processing raw content with specific data extraction");
-          const content = firecrawlData.data.markdown || firecrawlData.data.html;
+        // Step 2: Process markdown/html content
+        else if (rawContent.length > 0) {
+          console.log("Processing raw content...");
           
-          // Try specific data extraction based on user query
-          const specificData = extractSpecificData(content, userQuery);
-          
-          if (specificData.length > 0) {
-            console.log(`Found ${specificData.length} specific data items for query: ${userQuery}`);
-            processedData = specificData.map(item => ({
-              ...item,
-              _url: url,
-              _source: 'specific_extraction'
-            }));
-            totalItemsExtracted += specificData.length;
+          // If user wants specific data, use ChatGPT for precision
+          if (specificDataType) {
+            console.log("Using ChatGPT for specific data extraction from raw content...");
+            const chatGPTResults = await extractSpecificDataWithChatGPT(rawContent, userQuery, specificDataType, openaiApiKey);
+            
+            if (chatGPTResults.length > 0) {
+              processedData = chatGPTResults.map((item, index) => ({
+                ...item,
+                _index: index,
+                _source: 'chatgpt_specific',
+                _url: url,
+                _extraction_method: 'chatgpt'
+              }));
+              extractionMethod = "chatgpt_specific";
+              totalItemsExtracted += chatGPTResults.length;
+            } else {
+              // Fallback to regex extraction
+              console.log("ChatGPT returned no results, trying regex fallback...");
+              const regexResults = extractSpecificDataRegex(rawContent, specificDataType);
+              processedData = regexResults.map((item, index) => ({
+                ...item,
+                _url: url
+              }));
+              extractionMethod = "regex_fallback";
+              totalItemsExtracted += regexResults.length;
+            }
           } else {
-            // Enhanced general content processing for markdown
+            // General content processing for markdown
             if (firecrawlData.data.markdown) {
-              const lines = content.split('\n').filter(line => line.trim());
+              const lines = rawContent.split('\n').filter(line => line.trim());
               const extractedItems = [];
               
               for (let i = 0; i < lines.length; i++) {
@@ -374,22 +610,6 @@ Deno.serve(async (req: Request) => {
                     });
                   }
                 }
-                // Extract plain URLs
-                else if (line.includes('http')) {
-                  const plainUrls = line.match(/https?:\/\/[^\s)]+/g);
-                  if (plainUrls) {
-                    plainUrls.forEach(plainUrl => {
-                      extractedItems.push({
-                        type: 'url',
-                        url: plainUrl.trim(),
-                        context: line,
-                        source_url: url,
-                        _index: extractedItems.length,
-                        _source: 'markdown_parsing'
-                      });
-                    });
-                  }
-                }
                 // Extract meaningful text content
                 else if (line.length > 20 && !line.startsWith('*') && !line.startsWith('-')) {
                   extractedItems.push({
@@ -404,11 +624,12 @@ Deno.serve(async (req: Request) => {
               
               processedData = extractedItems;
               totalItemsExtracted += extractedItems.length;
+              extractionMethod = "markdown_parsing";
             } else {
               // Fallback for HTML content
               processedData = [{
                 type: 'raw_content',
-                content: content.substring(0, 1000), // Limit content length
+                content: rawContent.substring(0, 1000), // Limit content length
                 url: url,
                 title: firecrawlData.data.metadata?.title,
                 description: firecrawlData.data.metadata?.description,
@@ -416,6 +637,7 @@ Deno.serve(async (req: Request) => {
                 _source: 'html_fallback'
               }];
               totalItemsExtracted += 1;
+              extractionMethod = "html_fallback";
             }
           }
         } else {
@@ -425,6 +647,7 @@ Deno.serve(async (req: Request) => {
 
         console.log("Processed data sample:", JSON.stringify(processedData.slice(0, 3), null, 2));
         console.log("Items extracted from this URL:", processedData.length);
+        console.log("Extraction method used:", extractionMethod);
 
         results.push({
           url: url,
@@ -438,7 +661,9 @@ Deno.serve(async (req: Request) => {
               userQuery: userQuery,
               itemCount: processedData.length,
               format: firecrawlPayload.formats[0],
-              extractionMethod: processedData.length > 0 ? processedData[0]._source : 'none'
+              extractionMethod: extractionMethod,
+              specificDataType: specificDataType,
+              usedChatGPT: extractionMethod.includes('chatgpt')
             },
             raw: {
               markdown: firecrawlData.data?.markdown?.substring(0, 2000), // Limit raw data size
@@ -473,11 +698,13 @@ Deno.serve(async (req: Request) => {
     console.log("Successful scrapes:", successfulScrapes);
     console.log("Failed scrapes:", failedScrapes);
     console.log("Total items extracted:", totalItemsExtracted);
+    console.log("Specific data type requested:", specificDataType);
     console.log("Results summary:", results.map(r => ({
       url: r.url,
       success: r.success,
       itemCount: r.success ? r.data?.extract?.length || 0 : 0,
       extractionMethod: r.success ? r.data?.metadata?.extractionMethod : 'failed',
+      usedChatGPT: r.success ? r.data?.metadata?.usedChatGPT : false,
       error: r.error
     })));
     console.log("=== EXECUTE SCRAPE DEBUG END ===");

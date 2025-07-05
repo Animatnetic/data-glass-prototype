@@ -208,11 +208,13 @@ function App() {
         id: `scrape-${Date.now()}`,
         preview: allExtractedData.slice(0, 10),
         total_items: scrapeData.summary.total_items_extracted,
-        selectors_used: Object.keys(extractionSchema?.properties || {}),
         status: 'completed',
         urls_processed: scrapeData.summary.successful_scrapes,
         failed_urls: scrapeData.summary.failed_scrapes,
-        raw_data: allExtractedData
+        raw_data: allExtractedData,
+        extraction_method: scrapeData.results[0]?.data?.metadata?.extractionMethod || 'unknown',
+        used_chatgpt: scrapeData.results.some(r => r.data?.metadata?.usedChatGPT) || false,
+        specific_data_type: scrapeData.results[0]?.data?.metadata?.specificDataType || null
       });
 
       // Add successful scrape to history
@@ -276,9 +278,11 @@ function App() {
       id: record.id,
       preview: record.preview_data || [],
       total_items: record.results.length,
-      selectors_used: ['h1', 'h2', '.title'],
       status: 'completed',
-      raw_data: record.results
+      raw_data: record.results,
+      extraction_method: 'database',
+      used_chatgpt: false,
+      specific_data_type: null
     });
     setUrls(record.target_urls.map((url: string, index: number) => ({ 
       id: (index + 1).toString(), 
@@ -476,9 +480,26 @@ function App() {
                     <h3 className="text-xl font-semibold text-white mb-2">
                       Extraction Results
                     </h3>
-                    <p className="text-white/60 text-sm">
-                      Found {result.total_items} items from {result.urls_processed || 1} {result.urls_processed === 1 ? 'URL' : 'URLs'} using {result.selectors_used.length} selectors
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-white/60 text-sm">
+                        Found {result.total_items} items from {result.urls_processed || 1} {result.urls_processed === 1 ? 'URL' : 'URLs'}
+                      </p>
+                      {result.extraction_method && (
+                        <p className="text-white/50 text-xs">
+                          Extraction method: {result.extraction_method}
+                          {result.used_chatgpt && (
+                            <span className="ml-2 px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">
+                              AI Enhanced
+                            </span>
+                          )}
+                          {result.specific_data_type && (
+                            <span className="ml-2 px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">
+                              Specific: {result.specific_data_type}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex gap-2">
