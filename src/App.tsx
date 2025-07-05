@@ -7,16 +7,23 @@ import {
   History,
   RefreshCw,
   ExternalLink,
+  LogIn,
   Plus,
   Trash2
 } from 'lucide-react';
+import { useAuth } from './hooks/useAuth';
+import { useScrapes } from './hooks/useScrapes';
 import { useLocalHistory } from './hooks/useLocalHistory';
+import { supabase } from './lib/supabase';
 import { DataTable } from './components/DataTable';
 import { GlassCard } from './components/GlassCard';
 import { JsonViewer } from './components/JsonViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { HistoryPanel } from './components/HistoryPanel';
+import { AuthModal } from './components/AuthModal';
+import { UserMenu } from './components/UserMenu';
 import { downloadCSV, downloadMarkdown } from './utils/exportUtils';
+import { ScrapeRecord } from './lib/supabase';
 import { LocalScrapeRecord } from './hooks/useLocalHistory';
 
 
@@ -38,7 +45,9 @@ interface UrlEntry {
 }
 
 function App() {
-  const { scrapes, createScrape, deleteScrape } = useLocalHistory();
+  const { user, loading: authLoading } = useAuth();
+  const { scrapes: dbScrapes, createScrape: createDbScrape, deleteScrape: deleteDbScrape } = useScrapes();
+  const { scrapes: localScrapes, createScrape: createLocalScrape, deleteScrape: deleteLocalScrape } = useLocalHistory();
   
   const [urls, setUrls] = useState<UrlEntry[]>([{ id: '1', url: '' }]);
   const [query, setQuery] = useState('');
@@ -47,6 +56,12 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Use database scrapes if user is logged in, otherwise use local scrapes
+  const scrapes = user && supabase ? dbScrapes : localScrapes;
+  const createScrape = user && supabase ? createDbScrape : createLocalScrape;
+  const deleteScrape = user && supabase ? deleteDbScrape : deleteLocalScrape;
 
   const addUrl = () => {
     const newId = Date.now().toString();
@@ -116,19 +131,19 @@ function App() {
     setResult(null);
 
     try {
-      // Check if Edge Functions are available
-      const edgeFunctionUrl = import.meta.env.VITE_EDGE_FUNCTION_URL || '';
-      const edgeFunctionKey = import.meta.env.VITE_EDGE_FUNCTION_KEY || '';
+      // Check if Supabase Edge Functions are available
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       
       let useEdgeFunctions = false;
       
-      if (edgeFunctionUrl && edgeFunctionKey) {
+      if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'your_supabase_url' && supabaseAnonKey !== 'your_supabase_anon_key') {
         // Test if Edge Functions are available
         try {
-          const testResponse = await fetch(`${edgeFunctionUrl}/convert-query`, {
+          const testResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${edgeFunctionKey}`,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ test: true }),
@@ -143,13 +158,13 @@ function App() {
       }
 
       if (useEdgeFunctions) {
-        // Use Edge Functions
-        console.log('Using Edge Functions for scraping...');
+        // Use Supabase Edge Functions
+        console.log('Using Supabase Edge Functions for scraping...');
         
-        const convertResponse = await fetch(`${edgeFunctionUrl}/convert-query`, {
+        const convertResponse = await fetch(`${supabaseUrl}/functions/v1/convert-query`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${edgeFunctionKey}`,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -165,10 +180,10 @@ function App() {
 
         const { firecrawlConfig, extractionSchema } = await convertResponse.json();
         
-        const scrapeResponse = await fetch(`${edgeFunctionUrl}/execute-scrape`, {
+        const scrapeResponse = await fetch(`${supabaseUrl}/functions/v1/execute-scrape`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${edgeFunctionKey}`,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -222,7 +237,7 @@ function App() {
           specific_data_type: scrapeData.results[0]?.data?.metadata?.specificDataType || null
         });
 
-        // Save to local storage
+        // Save to database or local storage
         if (allExtractedData.length > 0) {
           await createScrape(
             validUrls.map(entry => entry.url),
@@ -365,14 +380,14 @@ function App() {
     }
   };
 
-  const handleHistorySelect = (record: LocalScrapeRecord) => {
+  const handleHistorySelect = (record: ScrapeRecord | LocalScrapeRecord) => {
     setResult({
       id: record.id,
       preview: record.preview_data || [],
-      total_items: record.total_items,
+      total_items: record.total_items || record.results?.length || 0,
       status: 'completed',
       raw_data: record.results,
-      extraction_method: 'local_storage',
+      extraction_method: user && supabase ? 'database' : 'local_storage',
       used_chatgpt: false,
       specific_data_type: null
     });
@@ -397,6 +412,14 @@ function App() {
 
   const validUrlCount = urls.filter(entry => entry.url.trim() !== '').length;
   
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 flex items-center justify-center">
+        <LoadingSpinner message="Loading..." />
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 p-4">
       <div className="container mx-auto max-w-6xl">
@@ -415,7 +438,19 @@ function App() {
             </p>
           </div>
           
-          <div className="flex items-center space-x-4"></div>
+          <div className="flex items-center space-x-4">
+            {user ? (
+              <UserMenu />
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In</span>
+              </button>
+            )}
+          </div>
         </motion.div>
 
         {/* Main Interface */}
@@ -504,10 +539,13 @@ function App() {
                 <button
                   onClick={() => setIsHistoryOpen(true)}
                   className="flex items-center space-x-2 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
-                  title="View scrape history"
+                  title={user && supabase ? "View your scrape history" : "View local scrape history"}
                 >
                   <History className="w-5 h-5" />
                   <span>History</span>
+                  {!user && (
+                    <span className="text-xs opacity-60">(Local)</span>
+                  )}
                 </button>
 
                 {result && (
@@ -644,6 +682,11 @@ function App() {
         onRemoveHistory={handleHistoryRemove}
       />
       
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </div>
   );
 }

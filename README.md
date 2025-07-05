@@ -1,21 +1,23 @@
 # DataGlass - Intelligent Web Scraping Platform
 
-DataGlass is a modern web scraping application built with React. It allows users to extract data from any website using natural language queries with local history storage.
+DataGlass is a modern, serverless web scraping application built with React and Supabase. It allows users to extract data from any website using natural language queries.
 
 ## Features
 
 - **Natural Language Queries**: Describe what you want to extract in plain English
-- **Local History Storage**: Your scraping history is saved locally in your browser
+- **User Authentication**: Secure sign-in with email and password
+- **Database History**: Your scraping history is saved to your account (with local fallback)
+- **Serverless Edge Computing**: Fast, scalable scraping powered by Supabase Edge Functions
 - **Interactive Data Tables**: View and filter extracted data with advanced table features
-- **Multiple Export Formats**: Download data as JSON or PDF
-- **Persistent History**: Access and restore previous scraping sessions stored locally
+- **Multiple Export Formats**: Download data as JSON, CSV, or Markdown
+- **Persistent History**: Access and restore previous scraping sessions
 - **Glassmorphism UI**: Beautiful, modern interface with frosted glass effects
 
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS, Framer Motion
-- **Storage**: Local Storage for history persistence
-- **Data Processing**: Deno with HTML parsing
+- **Backend**: Supabase (Database, Authentication, Edge Functions)
+- **Data Processing**: Deno with HTML parsing and AI-powered extraction
 - **UI Components**: React Table, Syntax Highlighter, Lucide Icons
 
 ## Setup
@@ -31,19 +33,29 @@ DataGlass is a modern web scraping application built with React. It allows users
    npm run dev
    ```
 
-4. (Optional) Set up advanced AI-powered scraping:
-   - Deploy the Edge Functions from the `/edge-functions` directory to a serverless platform
-   - Set up environment variables for your deployed functions
-   - Configure VITE_EDGE_FUNCTION_URL and VITE_EDGE_FUNCTION_KEY in your .env file
+4. Set up Supabase for full functionality:
+   - Click the "Connect to Supabase" button in the top right corner of the application
+   - This will automatically configure your Supabase connection and deploy Edge Functions
+   - Alternatively, create a new Supabase project manually:
+     - Go to https://supabase.com and create a new project
+     - Navigate to 'Project Settings' -> 'API'
+     - Copy your Project URL and anon/public key
+     - Update the `.env` file with your credentials
+     - Run the SQL migration in `supabase/migrations/`
+     - Deploy the Edge Functions (convert-query and execute-scrape)
+     - Set up the required secrets in your Supabase project:
+       - OPENAI_API_KEY: Your OpenAI API key
+       - FIRECRAWL_API_KEY: Your Firecrawl API key
 
 ## Usage
 
-1. Enter a target URL (e.g., `https://example.com`) 
-2. Describe what you want to extract (e.g., "all headlines", "product prices")
-3. Click "Extract Data" to start the scraping process
-4. View results in an interactive table or JSON format
-5. Download data as JSON, CSV, or Markdown
-6. Access previous scrapes through the History panel (stored locally)
+1. **Sign Up/Sign In**: Create an account or sign in to save your scraping history
+2. Enter a target URL (e.g., `https://example.com`) 
+3. Describe what you want to extract (e.g., "all headlines", "product prices")
+4. Click "Extract Data" to start the scraping process
+5. View results in an interactive table or JSON format
+6. Download data as JSON, CSV, or Markdown
+7. Access previous scrapes through the History panel
 
 ## Features
 
@@ -54,18 +66,30 @@ DataGlass is a modern web scraping application built with React. It allows users
 - Local history storage in browser
 - Works immediately without any configuration
 
-### Advanced Mode (Requires Edge Function Setup)
-- AI-powered extraction using deployed Edge Functions
+### Full Mode (Requires Supabase Setup)
+- User authentication and account management
+- AI-powered extraction using OpenAI and Firecrawl
 - Natural language query processing
+- Database-stored scraping history
 - Advanced data processing and extraction
 - Serverless Edge Functions for scalable processing
 
 ## Architecture
 
 - **Frontend**: React SPA with glassmorphism UI
-- **Storage**: Browser Local Storage for history
-- **Edge Functions**: Optional Deno-based serverless functions for advanced scraping
-- **Deployment**: Static hosting for frontend
+- **Authentication**: Supabase Auth with email/password
+- **Database**: PostgreSQL for storing user profiles and scrape history
+- **Edge Functions**: Deno-based serverless functions for AI-powered scraping
+- **Storage**: Database for authenticated users, localStorage for guests
+- **Deployment**: Vercel for frontend, Supabase for backend
+
+## Database Schema
+
+The application uses two main tables:
+- `user_profiles`: User account information
+- `scrapes`: Scraping history and results
+
+Row Level Security (RLS) ensures users can only access their own data.
 
 ## Contributing
 
